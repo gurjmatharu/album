@@ -32,9 +32,10 @@ inputs and reuses it.
 
 ## The spec
 
-`album.json` (`SpecSchema` in `src/types.ts`): title, print profile id, the people and their
+`album.json` (`SpecSchema` in `src/types.ts`): title, print profile id, theme, the people and their
 minimum appearances, and the spreads in order. A spread is `{id, chapter, template, slots}`
-and a slot is `{slot, photo, focus?}`. There is no geometry in the spec. Where a photo lands
+and a slot is `{slot, photo, focus?}`. The `theme` is the album's art
+direction ([DESIGN.md](DESIGN.md)). There is no geometry in the spec. Where a photo lands
 and how it is cropped is computed.
 
 ## Templates and the crop solver
@@ -66,6 +67,10 @@ Errors block the print file. Warnings are listed in the proof.
 | `face-cut` | error | a face is partly outside the crop or the trim |
 | `eyes-closed` | error on a lead slot, else warning | `eyesOpen < 0.3` (nothing measures this yet, issue 8) |
 | `coverage` | error | a named person is fully visible in fewer slots than their minimum |
+| `unknown-theme`, `off-theme` | error | the theme does not exist, or a spread uses a template outside it |
+| `mixed-mono` | error | black-and-white and colour pictures share a spread |
+| `spread-colour`, `spread-light` | warning | two pictures on a spread differ in colour cast by over 18 or in lightness by over 30 (CIELAB) |
+| `gaze-off-page` | warning | a face on a single page looks toward that page's outer edge (nothing measures gaze yet, issue 23) |
 | `face-near-trim` | warning | a face is inside the safe margin |
 | `heavy-crop` | warning | under half the photo survives |
 | `chronology` | warning | a spread is earlier in the day than the one before |
@@ -76,7 +81,8 @@ Errors block the print file. Warnings are listed in the proof.
 
 `heuristic` (`src/director/heuristic.ts`): chapters at pauses over 30 minutes, spreads per
 chapter by the square root of its size, and for each group of photos the template with the
-best shape fit that cuts no face and stays above the minimum resolution. It has no taste. It
+best shape fit that cuts no face, stays above the minimum resolution and keeps the spread's
+pictures together in colour and light. It has no taste. It
 exists so the pipeline runs with no API key and as the baseline a model must beat.
 
 `claude` (`src/director/claude.ts`): one `claude-opus-5-5` call at high effort with the

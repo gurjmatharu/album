@@ -48,8 +48,9 @@ them. Close an issue by deleting it here in the commit that fixes it.
 10. **No reviewer.** Nothing looks at the rendered spreads for taste. Planned: one read-only
     vision pass over proof pages against a rubric, then a fresh fixer per flagged spread.
 
-11. **The heuristic director has no taste.** It fits shapes and avoids lint errors. It does
-    not know a first kiss from a table setting and will not pick a strong opening picture.
+11. **The heuristic director has no taste.** It fits shapes, keeps colour and light together
+    and avoids lint errors. It does not know a first kiss from a table setting and will not
+    pick a strong opening picture. A spread that is good design needs the model director.
 
 12. **Near-duplicates are caught only inside 20 seconds.** The same pose shot a minute apart,
     or by a second photographer, passes. Image embeddings would catch these.
@@ -60,6 +61,27 @@ them. Close an issue by deleting it here in the commit that fixes it.
 
 14. **A face near the fold on a single page is not flagged.** `face-on-fold` only fires for
     slots that cross the fold; a face at the inner edge of a full-bleed page passes.
+
+## Design
+
+20. **Continuity thresholds are untuned.** `spread-colour` (cast 18), `spread-light`
+    (lightness 30) and the black-and-white cut-off (chroma 5) were set on synthetic
+    pictures. Mean colour is also blunt: two pictures with the same average can clash. Tune
+    on a real wedding, and consider a palette or histogram distance.
+
+21. **Scale variety, one-idea-per-spread and echo are not checked.** They need subject size
+    (face size is a start) and scene understanding from the tagging pass (issue 9). Today
+    only the model director's prompt carries them. See [DESIGN.md](DESIGN.md).
+
+22. **No grade matching.** The pipeline never alters a photo's colour. If the edit is
+    inconsistent across a spread the lint warns and nothing fixes it.
+
+23. **Nothing measures gaze.** The `gaze-off-page` lint and the director's cost exist, but
+    the face worker does not write `gaze`. InsightFace reports head pose; mapping its yaw to
+    left/right has to be checked on real photos before it is trusted.
+
+24. **Templates have fixed margins.** A theme picks which templates are allowed and the page
+    colour, not margin or gap sizes. No typography: no titles, dates or captions.
 
 ## Plumbing
 

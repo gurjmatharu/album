@@ -59,13 +59,14 @@ export async function makeSample(photoDir: string, work: string, opts: SampleOpt
       const portrait = rand() < 0.35;
       const lowRes = frame % 17 === 0;
       const blurred = frame % 13 === 0;
+      const mono = frame % 9 === 0;
       const burst = frame % 4 === 0 ? 3 : 1;
       const count = Math.floor(rand() * 4);
       const cast = [...PEOPLE.map((p) => p.id), "", ""].sort(() => rand() - 0.5).slice(0, count);
       const boxes: Face[] = cast.map((person, k) => {
         const w = 0.07 + rand() * 0.05;
         const x = 0.08 + ((k + rand() * 0.6) / Math.max(count, 1)) * 0.8;
-        return { x: Math.min(x, 0.9 - w), y: 0.2 + rand() * 0.25, w, h: 0, cluster: person ? `c-${person}` : `c-guest${frame}${k}` };
+        return { x: Math.min(x, 0.9 - w), y: 0.2 + rand() * 0.25, w, h: 0, cluster: person ? `c-${person}` : `c-guest${frame}${k}`, gaze: (["left", "right", "front"] as const)[Math.floor(rand() * 3)] };
       });
       const texture = Array.from({ length: 260 }, () => ({ x: rand(), y: rand(), w: 0.004 + rand() * 0.03, h: 0.004 + rand() * 0.03, l: 25 + rand() * 55 }));
       if (frame % every !== 0) continue;
@@ -87,6 +88,7 @@ ${boxes.map((b) => `<ellipse cx="${(b.x + b.w / 2) * W + shot * 2}" cy="${(b.y +
         const file = join(photoDir, `${m.name}-${String(frame).padStart(3, "0")}${shot ? "-" + shot : ""}.jpg`);
         let img = sharp(Buffer.from(svg));
         if (blurred) img = img.blur(Math.max(2, W / 500));
+        if (mono) img = img.greyscale();
         await img.jpeg({ quality: 88 }).withExif({ IFD2: { DateTimeOriginal: stamp } } as never).toFile(file);
         utimesSync(file, when, when);
         const id = createHash("sha256").update(readFileSync(file)).digest("hex").slice(0, 10);

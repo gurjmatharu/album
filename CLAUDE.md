@@ -6,6 +6,9 @@ closes or adds an issue.
 
 - **Models write `album.json`, never layout code.** A new look is a new template in
   `src/catalog.ts` with a test, not HTML written per album.
+- **Design rules live in [docs/DESIGN.md](docs/DESIGN.md).** A rule a script can measure
+  becomes a lint; the rest goes in the director's prompt and the reviewer's rubric, in the
+  same words.
 - **Scripts judge what a script can check.** Anything measurable (resolution, duplicates,
   faces on the fold, coverage, page count) is a lint in `src/lints.ts`. A model judges taste
   only. Every lint message names the spread, slot, photo and the number.

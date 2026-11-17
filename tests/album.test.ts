@@ -21,7 +21,7 @@ function photo(id: string, over: Partial<Photo> = {}): Photo {
 }
 
 function spec(spreads: AlbumSpec["spreads"], people: AlbumSpec["people"] = []): AlbumSpec {
-  return { version: 1, title: "t", profile: profile.id, background: "#ffffff", people, spreads };
+  return { version: 1, title: "t", profile: profile.id, theme: "journal", background: "#ffffff", people, spreads };
 }
 
 const rules = (s: AlbumSpec, photos: Photo[]) => lint(s, resolveLayout(s, new Map(photos.map((p) => [p.id, p])), profile)).filter((i) => i.severity === "error").map((i) => i.rule);
@@ -110,6 +110,30 @@ describe("lints", () => {
     expect(out.some((i) => i.rule === "page-count")).toBe(true);
   });
 
+  test("black-and-white beside colour, and a template outside the theme", () => {
+    const grey = { l: 50, a: 0, b: 0, chroma: 1 };
+    const warm = { l: 55, a: 8, b: 22, chroma: 24 };
+    const ps = [photo("a", { dhash: "ffff000000000000", tone: grey }), photo("b", { tone: warm })];
+    expect(rules(spec([pair("a", "b")]), ps)).toContain("mixed-mono");
+    expect(rules(spec([pair("a", "b")]), [photo("a", { dhash: "ffff000000000000", tone: warm }), photo("b", { tone: warm })])).toEqual([]);
+    const gallery = { ...spec([pair("a", "b")]), theme: "gallery" };
+    const out = lint(gallery, resolveLayout(gallery, new Map(ps.map((p) => [p.id, p])), profile));
+    expect(out.some((i) => i.rule === "off-theme")).toBe(true);
+  });
+
+  test("clashing colour casts and a subject looking off the page are warned about", () => {
+    const warm = { l: 55, a: 8, b: 25, chroma: 26 };
+    const cool = { l: 55, a: -4, b: -15, chroma: 16 };
+    const ps = [
+      photo("a", { dhash: "ffff000000000000", tone: warm, faces: [{ x: 0.45, y: 0.3, w: 0.1, h: 0.15, gaze: "left" }] }),
+      photo("b", { tone: cool }),
+    ];
+    const s = spec([pair("a", "b")]);
+    const got = lint(s, resolveLayout(s, new Map(ps.map((p) => [p.id, p])), profile)).map((i) => i.rule);
+    expect(got).toContain("spread-colour");
+    expect(got).toContain("gaze-off-page");
+  });
+
   test("hamming distance", () => {
     expect(hamming("0000000000000000", "000000000000000f")).toBe(4);
   });
@@ -157,7 +181,7 @@ describe("end to end on the synthetic sample", () => {
     expect(kept.length).toBeLessThan(photos.length);
 
     const small = { ...profile, pageMm: { w: 150, h: 150 } };
-    const album = directHeuristic(kept, new Map(selects.map((s) => [s.id, s.score])), { title: "Test", profile: small, spreads: 5, people: [] });
+    const album = directHeuristic(kept, new Map(selects.map((s) => [s.id, s.score])), { title: "Test", profile: small, spreads: 5, people: [], theme: "journal" });
     expect(album.spreads).toHaveLength(5);
     const layout = resolveLayout(album, new Map(photos.map((p) => [p.id, p])), small);
     const issues = lint(album, layout);

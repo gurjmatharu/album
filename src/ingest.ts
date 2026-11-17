@@ -61,6 +61,7 @@ async function measure(file: string, rel: string): Promise<Photo> {
 
   const preview = await sharp(file).rotate().resize(512, 512, { fit: "inside" }).greyscale().raw().toBuffer({ resolveWithObject: true });
   const sharpness = laplacianVariance(preview.data, preview.info.width, preview.info.height);
+  const colour = await sharp(file).rotate().resize(96, 96, { fit: "inside" }).removeAlpha().toColourspace("srgb").raw().toBuffer();
   const tiny = await sharp(file).rotate().resize(9, 8, { fit: "fill" }).greyscale().raw().toBuffer();
 
   let taken: Date | undefined;
@@ -84,8 +85,37 @@ async function measure(file: string, rel: string): Promise<Photo> {
     timeSource: taken ? "exif" : "mtime",
     sharpness: Math.round(sharpness * 100) / 100,
     dhash: dhashFromGrey(tiny),
+    tone: toneOf(colour),
     faces: [],
   };
+}
+
+function lab(r: number, g: number, b: number): [number, number, number] {
+  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const [R, G, B] = [lin(r / 255), lin(g / 255), lin(b / 255)];
+  const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  const x = f((0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047);
+  const y = f(0.2126 * R + 0.7152 * G + 0.0722 * B);
+  const z = f((0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883);
+  return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+}
+
+/** Mean CIELAB colour and mean chroma of interleaved sRGB pixels. */
+export function toneOf(rgb: Uint8Array): { l: number; a: number; b: number; chroma: number } {
+  let L = 0;
+  let A = 0;
+  let B = 0;
+  let C = 0;
+  const n = rgb.length / 3;
+  for (let i = 0; i < rgb.length; i += 3) {
+    const [l, a, b] = lab(rgb[i]!, rgb[i + 1]!, rgb[i + 2]!);
+    L += l;
+    A += a;
+    B += b;
+    C += Math.hypot(a, b);
+  }
+  const r = (v: number) => Math.round((v / n) * 10) / 10;
+  return { l: r(L), a: r(A), b: r(B), chroma: r(C) };
 }
 
 export interface IngestResult {
@@ -113,7 +143,7 @@ export async function ingest(dir: string, work: string): Promise<IngestResult> {
     if (!READABLE.has(ext)) continue;
     const stat = statSync(file);
     const old = before.get(rel);
-    if (old && old.bytes === stat.size && old.mtimeMs === Math.round(stat.mtimeMs)) {
+    if (old && old.tone && old.bytes === stat.size && old.mtimeMs === Math.round(stat.mtimeMs)) {
       result.photos.push({ ...old, faces: [] });
       result.reused++;
       continue;

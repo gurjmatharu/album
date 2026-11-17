@@ -1,4 +1,5 @@
 import type { Layout } from "./layout";
+import { CAST_LIMIT, LIGHT_LIMIT, isMono, themeById, toneGap } from "./themes";
 import type { AlbumSpec, Issue, Photo } from "./types";
 
 /** Hamming distance between two 64-bit hashes given as 16 hex chars. */
@@ -38,6 +39,9 @@ export function lint(spec: AlbumSpec, layout: Layout): Issue[] {
   if (pages % p.pages.multiple !== 0) err("page-count", `${pages} pages is not a multiple of ${p.pages.multiple}`);
   if (!p.verified) warn("profile-unverified", `print profile ${p.id} has not been checked against the lab's spec: ${p.notes}`);
 
+  const theme = themeById(spec.theme);
+  if (!theme) err("unknown-theme", `no theme "${spec.theme}"`);
+
   const used: { photo: Photo; spread: string; slot: string }[] = [];
   const appearances = new Map<string, number>();
   let lastTime = -Infinity;
@@ -48,6 +52,26 @@ export function lint(spec: AlbumSpec, layout: Layout): Issue[] {
     const prev = layout.spreads[i - 1];
     run = prev && prev.template.id === sp.template.id ? run + 1 : 1;
     if (run === 3) warn("pacing", `spread ${sp.id}: third ${sp.template.id} in a row`, { spread: sp.id });
+
+    if (theme && !theme.templates.includes(sp.template.id)) {
+      err("off-theme", `spread ${sp.id}: template ${sp.template.id} is not part of the ${theme.id} theme`, { spread: sp.id });
+    }
+
+    // Continuity across the two pages: one spread is one picture made of several.
+    const mono = sp.slots.filter((s) => isMono(s.photo));
+    if (mono.length > 0 && mono.length < sp.slots.length) {
+      err("mixed-mono", `spread ${sp.id}: black-and-white (${mono.map((s) => s.photo.path).join(", ")}) mixed with colour`, { spread: sp.id });
+    } else {
+      let worst: { cast: number; light: number; a: string; b: string } | undefined;
+      for (const a of sp.slots) {
+        for (const b of sp.slots) {
+          const gap = a === b ? undefined : toneGap(a.photo, b.photo);
+          if (gap && (!worst || gap.cast / CAST_LIMIT + gap.light / LIGHT_LIMIT > worst.cast / CAST_LIMIT + worst.light / LIGHT_LIMIT)) worst = { ...gap, a: a.photo.path, b: b.photo.path };
+        }
+      }
+      if (worst && worst.cast > CAST_LIMIT) warn("spread-colour", `spread ${sp.id}: ${worst.a} and ${worst.b} differ in colour cast by ${worst.cast.toFixed(0)} (limit ${CAST_LIMIT})`, { spread: sp.id });
+      if (worst && worst.light > LIGHT_LIMIT) warn("spread-light", `spread ${sp.id}: ${worst.a} and ${worst.b} differ in lightness by ${worst.light.toFixed(0)} (limit ${LIGHT_LIMIT})`, { spread: sp.id });
+    }
 
     const times = sp.slots.map((s) => Date.parse(s.photo.takenAt)).sort((a, b) => a - b);
     const mid = times[Math.floor(times.length / 2)];
@@ -83,6 +107,12 @@ export function lint(spec: AlbumSpec, layout: Layout): Issue[] {
         else {
           if (f.nearTrim) warn("face-near-trim", `${where}: ${who} is within ${p.safeMm} mm of the trim`, at);
           if (f.person) seen.add(f.person);
+        }
+        const fold = p.pageMm.w;
+        const onLeft = s.rect.x + s.rect.w <= fold + 0.01;
+        const onRight = s.rect.x >= fold - 0.01;
+        if ((onLeft && f.gaze === "left") || (onRight && f.gaze === "right")) {
+          warn("gaze-off-page", `${where}: ${who} looks off the ${f.gaze} edge, away from the facing page`, at);
         }
         if (f.eyesOpen !== undefined && f.eyesOpen < 0.3) {
           (s.def.hero ? err : warn)("eyes-closed", `${where}: ${who} has eyes closed (${f.eyesOpen.toFixed(2)})`, at);

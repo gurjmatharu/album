@@ -9,6 +9,7 @@ import { resolveLayout } from "./layout";
 import { lint, summarize } from "./lints";
 import { preflight } from "./preflight";
 import { readSourceDir, render } from "./render";
+import { THEMES } from "./themes";
 import type { AlbumSpec, Issue, Photo } from "./types";
 import { listProfiles, loadPeople, loadPhotos, loadProfile, loadSpec, logStage, paths, readJson, writeJson } from "./work";
 
@@ -22,12 +23,14 @@ const USAGE = `album <verb> [options]
   build                  lint, render proof.pdf and the print file, preflight them
   run <photo dir>        ingest, cull, direct, build
   profiles               list print profiles
+  themes                 list themes
 
 options
   --work <dir>           work directory (default ./work)
   --profile <id>         print profile (default proof-10x10)
   --spreads <n>          number of spreads (default 20)
   --title <text>         album title
+  --theme <id>           art direction: gallery (default), cinematic or journal
   --director <name>      heuristic (default, no API) or claude (needs ANTHROPIC_API_KEY)
   --force                build: write the print file even with lint errors`;
 
@@ -91,7 +94,7 @@ async function main(): Promise<number> {
     const keep = new Set(selects.filter((s) => s.keep).map((s) => s.id));
     const kept = photos.filter((x) => keep.has(x.id));
     const profile = loadProfile(flags.profile ?? "proof-10x10");
-    const opts: DirectOptions = { title: flags.title ?? "Album", profile, spreads: Number(flags.spreads ?? 20), people: loadPeople(work).people };
+    const opts: DirectOptions = { title: flags.title ?? "Album", profile, spreads: Number(flags.spreads ?? 20), people: loadPeople(work).people, theme: flags.theme ?? "gallery" };
     const who = flags.director ?? "heuristic";
     let spec: AlbumSpec;
     let usd = 0;
@@ -164,6 +167,9 @@ async function main(): Promise<number> {
     }
     case "profiles":
       for (const pr of listProfiles()) console.log(`${pr.id}  ${pr.pageMm.w}x${pr.pageMm.h} mm  ${pr.export}  ${pr.verified ? "verified" : "UNVERIFIED"}  ${pr.name}`);
+      return 0;
+    case "themes":
+      for (const t of THEMES) console.log(`${t.id}  ${t.description}\n    templates: ${t.templates.join(", ")}`);
       return 0;
     default:
       console.log(USAGE);

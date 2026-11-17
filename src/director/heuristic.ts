@@ -1,5 +1,6 @@
 import { CATALOG, type SlotDef, type Template } from "../catalog";
 import { slotRectMm, solveCrop } from "../layout";
+import { CAST_LIMIT, LIGHT_LIMIT, isMono, themeById, toneGap } from "../themes";
 import type { AlbumSpec, Person, Photo, Profile } from "../types";
 
 export interface DirectOptions {
@@ -8,6 +9,8 @@ export interface DirectOptions {
   /** Number of spreads to fill. */
   spreads: number;
   people: Person[];
+  /** Theme id from src/themes.ts. */
+  theme: string;
   /** A pause longer than this many minutes starts a new chapter. */
   chapterGapMin?: number;
 }
@@ -71,12 +74,23 @@ function fill(template: Template, group: Photo[], score: (id: string) => number,
   const pool = [...group].sort((a, b) => score(b.id) - score(a.id));
   const chosen = new Map<string, Photo>();
   let cost = 0;
+  /** How badly a photo would break the spread's continuity with the photos already on it. */
+  const clash = (ph: Photo): number => {
+    let c = 0;
+    for (const other of chosen.values()) {
+      if (isMono(ph) !== isMono(other)) c += 5;
+      const gap = toneGap(ph, other);
+      if (gap) c += gap.cast / CAST_LIMIT + gap.light / LIGHT_LIMIT;
+    }
+    return chosen.size ? c / chosen.size : 0;
+  };
   const slotCost = (def: SlotDef, ph: Photo): number => {
     const r = slotRectMm(def, profile);
     const placed = solveCrop(ph, def, profile);
     const bad = placed.faces.filter((f) => f.cut || f.onFold).length;
     const lowRes = placed.effDpi < profile.minDpi ? 5 : 0;
-    return Math.abs(Math.log(ph.width / ph.height / (r.w / r.h))) + (1 - placed.kept) + 5 * bad + lowRes - (def.hero ? 1 : 0.5) * score(ph.id);
+    const away = placed.faces.filter((f) => (r.x + r.w <= profile.pageMm.w + 0.01 && f.gaze === "left") || (r.x >= profile.pageMm.w - 0.01 && f.gaze === "right")).length;
+    return Math.abs(Math.log(ph.width / ph.height / (r.w / r.h))) + (1 - placed.kept) + 5 * bad + lowRes + 0.4 * away + clash(ph) - (def.hero ? 1 : 0.5) * score(ph.id);
   };
   for (const def of order) {
     let best: { ph: Photo; c: number } | undefined;
@@ -97,12 +111,15 @@ function fill(template: Template, group: Photo[], score: (id: string) => number,
 }
 
 /**
- * The $0 director: chapters by time, spreads by chapter size, the template that fits each
- * group's shapes with no face cut or on the fold. It has no taste; it is the baseline a model
+ * The $0 director: chapters by time, spreads by chapter size, the theme's template that fits
+ * each group's shapes with no face cut or on the fold, filled with pictures that sit together
+ * in colour and light. It has no taste; it is the baseline a model
  * director has to beat, and what the pipeline runs on with no API key.
  */
 export function directHeuristic(photos: Photo[], scores: Map<string, number>, opts: DirectOptions): AlbumSpec {
   const score = (id: string) => scores.get(id) ?? 0;
+  const theme = themeById(opts.theme);
+  if (!theme) throw new Error(`no theme "${opts.theme}"`);
   const parts = chapters(photos, opts.chapterGapMin ?? 30, opts.spreads);
   const counts = allocate(parts.map((p) => p.length), opts.spreads);
   const spreads: AlbumSpec["spreads"] = [];
@@ -112,7 +129,7 @@ export function directHeuristic(photos: Photo[], scores: Map<string, number>, op
     for (const group of split(part, counts[ci]!)) {
       let best: Fill | undefined;
       for (const t of CATALOG) {
-        if (t.slots.length > group.length) continue;
+        if (!theme.templates.includes(t.id) || t.slots.length > group.length) continue;
         const f = fill(t, group, score, opts.profile);
         if (f.slots.length < t.slots.length) continue;
         if (recent[recent.length - 1] === t.id) f.cost += 1.5;
@@ -130,5 +147,5 @@ export function directHeuristic(photos: Photo[], scores: Map<string, number>, op
     }
   });
 
-  return { version: 1, title: opts.title, profile: opts.profile.id, background: "#ffffff", people: opts.people, spreads };
+  return { version: 1, title: opts.title, profile: opts.profile.id, theme: theme.id, background: theme.background, people: opts.people, spreads };
 }

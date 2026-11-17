@@ -25,7 +25,7 @@ bun run album ingest ~/Pictures/wedding
 uv run --project cv python cv/cv_worker.py faces ~/Pictures/wedding work   # see cv/README.md
 # edit work/people.json: name the clusters, set each person's minimum appearances
 bun run album cull
-bun run album direct --profile prodigi-layflat-12x12 --spreads 30 --title "..." [--director claude]
+bun run album direct --profile prodigi-layflat-12x12 --theme gallery --spreads 30 --title "..." [--director claude]
 bun run album build
 ```
 
@@ -36,7 +36,7 @@ written and lists what failed. `bun test` runs the unit tests and one end-to-end
 
 | File | Written by | What |
 |---|---|---|
-| `photos.json` | `ingest` | id (sha), size, capture time, sharpness, difference hash |
+| `photos.json` | `ingest` | id (sha), size, capture time, sharpness, difference hash, mean colour |
 | `faces.json`, `faces/` | face worker | face boxes with a cluster id; sample crops per cluster |
 | `people.json` | you | who matters, their minimum appearances, cluster → person |
 | `selects.json` | `cull` | burst id, score, keep or the reason it was dropped |
@@ -61,7 +61,8 @@ src/director/          heuristic.ts ($0 baseline), claude.ts (model director)
 src/print/profiles/    one JSON per lab product
 cv/                    Python face worker (InsightFace), run with uv
 scripts/make-sample.ts the synthetic wedding
-docs/                  ARCHITECTURE.md, PRINT.md, OPEN-ISSUES.md
+src/themes.ts          art direction: gallery, cinematic, journal; colour-continuity helpers
+docs/                  ARCHITECTURE.md, DESIGN.md, PRINT.md, OPEN-ISSUES.md
 ```
 
 ## Status

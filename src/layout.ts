@@ -6,6 +6,7 @@ export interface PlacedFace {
   rect: Rect;
   person?: string;
   eyesOpen?: number;
+  gaze?: "left" | "right" | "front";
   cut: boolean;
   onFold: boolean;
   nearTrim: boolean;
@@ -78,7 +79,7 @@ function placeFaces(photo: Photo, crop: Rect, rect: Rect, profile: Profile): Pla
     const onFold = crossesFold && intersects(r, fold - profile.gutterSafeMm, fold + profile.gutterSafeMm);
     const s0 = profile.safeMm;
     const nearTrim = !cutByTrim && (r.x < s0 || r.y < s0 || r.x + r.w > W - s0 || r.y + r.h > H - s0);
-    out.push({ rect: r, person: f.person, eyesOpen: f.eyesOpen, cut: cutByCrop || cutByTrim, onFold, nearTrim });
+    out.push({ rect: r, person: f.person, eyesOpen: f.eyesOpen, gaze: f.gaze, cut: cutByCrop || cutByTrim, onFold, nearTrim });
   }
   return out;
 }

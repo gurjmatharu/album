@@ -11,6 +11,8 @@ export const FaceSchema = z.object({
   person: z.string().optional(),
   /** 0 = closed, 1 = open. Absent means not measured. */
   eyesOpen: z.number().optional(),
+  /** Which way the person looks, as seen in the picture. Absent means not measured. */
+  gaze: z.enum(["left", "right", "front"]).optional(),
 });
 export type Face = z.infer<typeof FaceSchema>;
 
@@ -31,6 +33,8 @@ export interface Photo {
   sharpness: number;
   /** 64-bit difference hash, 16 hex chars. */
   dhash: string;
+  /** Mean colour of the picture in CIELAB, and mean chroma (0 = grey). Absent on photos ingested before this was measured. */
+  tone?: { l: number; a: number; b: number; chroma: number };
   faces: Face[];
 }
 
@@ -52,6 +56,8 @@ export const SpecSchema = z.object({
   version: z.literal(1),
   title: z.string(),
   profile: z.string(),
+  /** The album's art direction: an id from src/themes.ts. */
+  theme: z.string(),
   background: z.string(),
   people: z.array(z.object({ id: z.string(), name: z.string(), minAppearances: z.number().int().min(0) })),
   spreads: z.array(

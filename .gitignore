@@ -1,0 +1,7 @@
+node_modules/
+work/
+sample/
+*.log
+.env
+cv/.venv/
+__pycache__/

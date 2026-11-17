@@ -1,0 +1,134 @@
+import { CATALOG, type SlotDef, type Template } from "../catalog";
+import { slotRectMm, solveCrop } from "../layout";
+import type { AlbumSpec, Person, Photo, Profile } from "../types";
+
+export interface DirectOptions {
+  title: string;
+  profile: Profile;
+  /** Number of spreads to fill. */
+  spreads: number;
+  people: Person[];
+  /** A pause longer than this many minutes starts a new chapter. */
+  chapterGapMin?: number;
+}
+
+/** Split the day into chapters at the longest pauses, never more chapters than spreads. */
+export function chapters(photos: Photo[], gapMin: number, max: number): Photo[][] {
+  const sorted = [...photos].sort((a, b) => a.takenAt.localeCompare(b.takenAt) || a.path.localeCompare(b.path));
+  const gaps = sorted.slice(1).map((p, i) => ({ at: i + 1, min: (Date.parse(p.takenAt) - Date.parse(sorted[i]!.takenAt)) / 60000 }));
+  const cuts = gaps
+    .filter((g) => g.min > gapMin)
+    .sort((a, b) => b.min - a.min)
+    .slice(0, Math.max(0, max - 1))
+    .map((g) => g.at)
+    .sort((a, b) => a - b);
+  const out: Photo[][] = [];
+  let start = 0;
+  for (const c of [...cuts, sorted.length]) {
+    if (c > start) out.push(sorted.slice(start, c));
+    start = c;
+  }
+  return out;
+}
+
+/** Spreads per chapter: by the square root of its size, at least one, summing to `total`. */
+export function allocate(sizes: number[], total: number): number[] {
+  const weights = sizes.map((n) => Math.sqrt(n));
+  const sum = weights.reduce((a, b) => a + b, 0) || 1;
+  const cap = sizes.map((n) => Math.max(1, Math.floor(n / 2)));
+  const out = weights.map((w, i) => Math.min(cap[i]!, Math.max(1, Math.round((total * w) / sum))));
+  const room = (i: number) => cap[i]! - out[i]!;
+  for (let guard = 0; guard < 1000; guard++) {
+    const have = out.reduce((a, b) => a + b, 0);
+    if (have === total) break;
+    if (have < total) {
+      const i = out.map((_, j) => j).filter((j) => room(j) > 0).sort((a, b) => sizes[b]! / out[b]! - sizes[a]! / out[a]!)[0];
+      if (i === undefined) break; // not enough photos for more spreads
+      out[i]!++;
+    } else {
+      const i = out.map((_, j) => j).filter((j) => out[j]! > 1).sort((a, b) => sizes[a]! / out[a]! - sizes[b]! / out[b]!)[0];
+      if (i === undefined) break;
+      out[i]!--;
+    }
+  }
+  return out;
+}
+
+function split<T>(items: T[], parts: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < parts; i++) out.push(items.slice(Math.floor((i * items.length) / parts), Math.floor(((i + 1) * items.length) / parts)));
+  return out;
+}
+
+interface Fill {
+  template: Template;
+  slots: { slot: string; photo: string }[];
+  cost: number;
+}
+
+function fill(template: Template, group: Photo[], score: (id: string) => number, profile: Profile): Fill {
+  const order = [...template.slots].sort((a, b) => Number(b.hero) - Number(a.hero) || b.rect.w * b.rect.h - a.rect.w * a.rect.h);
+  const pool = [...group].sort((a, b) => score(b.id) - score(a.id));
+  const chosen = new Map<string, Photo>();
+  let cost = 0;
+  const slotCost = (def: SlotDef, ph: Photo): number => {
+    const r = slotRectMm(def, profile);
+    const placed = solveCrop(ph, def, profile);
+    const bad = placed.faces.filter((f) => f.cut || f.onFold).length;
+    const lowRes = placed.effDpi < profile.minDpi ? 5 : 0;
+    return Math.abs(Math.log(ph.width / ph.height / (r.w / r.h))) + (1 - placed.kept) + 5 * bad + lowRes - (def.hero ? 1 : 0.5) * score(ph.id);
+  };
+  for (const def of order) {
+    let best: { ph: Photo; c: number } | undefined;
+    for (const ph of pool) {
+      if ([...chosen.values()].includes(ph)) continue;
+      const c = slotCost(def, ph);
+      if (!best || c < best.c) best = { ph, c };
+    }
+    if (!best) break;
+    chosen.set(def.id, best.ph);
+    cost += best.c;
+  }
+  return {
+    template,
+    slots: template.slots.filter((d) => chosen.has(d.id)).map((d) => ({ slot: d.id, photo: chosen.get(d.id)!.id })),
+    cost: cost / template.slots.length - 0.12 * template.slots.length,
+  };
+}
+
+/**
+ * The $0 director: chapters by time, spreads by chapter size, the template that fits each
+ * group's shapes with no face cut or on the fold. It has no taste; it is the baseline a model
+ * director has to beat, and what the pipeline runs on with no API key.
+ */
+export function directHeuristic(photos: Photo[], scores: Map<string, number>, opts: DirectOptions): AlbumSpec {
+  const score = (id: string) => scores.get(id) ?? 0;
+  const parts = chapters(photos, opts.chapterGapMin ?? 30, opts.spreads);
+  const counts = allocate(parts.map((p) => p.length), opts.spreads);
+  const spreads: AlbumSpec["spreads"] = [];
+  const recent: string[] = [];
+
+  parts.forEach((part, ci) => {
+    for (const group of split(part, counts[ci]!)) {
+      let best: Fill | undefined;
+      for (const t of CATALOG) {
+        if (t.slots.length > group.length) continue;
+        const f = fill(t, group, score, opts.profile);
+        if (f.slots.length < t.slots.length) continue;
+        if (recent[recent.length - 1] === t.id) f.cost += 1.5;
+        else if (recent[recent.length - 2] === t.id) f.cost += 0.5;
+        if (!best || f.cost < best.cost) best = f;
+      }
+      if (!best) continue;
+      recent.push(best.template.id);
+      spreads.push({
+        id: `s${String(spreads.length + 1).padStart(2, "0")}`,
+        chapter: `Chapter ${ci + 1}`,
+        template: best.template.id,
+        slots: best.slots,
+      });
+    }
+  });
+
+  return { version: 1, title: opts.title, profile: opts.profile.id, background: "#ffffff", people: opts.people, spreads };
+}

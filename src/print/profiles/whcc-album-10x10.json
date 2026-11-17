@@ -1,0 +1,15 @@
+{
+  "id": "whcc-album-10x10",
+  "name": "WHCC album 10x10 in (final)",
+  "vendor": "whcc",
+  "pageMm": { "w": 254, "h": 254 },
+  "bleedMm": 3,
+  "safeMm": 8,
+  "gutterSafeMm": 8,
+  "dpi": 300,
+  "minDpi": 200,
+  "pages": { "min": 20, "max": 60, "multiple": 2 },
+  "export": "jpg-spreads",
+  "verified": false,
+  "notes": "Placeholder geometry. WHCC albums are ordered through the Order Submit API with an ItemBookAttribute block; the real size, bleed, spread count limits and file format must come from the WHCC product catalog (needs API credentials)."
+}

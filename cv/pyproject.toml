@@ -1,0 +1,12 @@
+[project]
+name = "album-cv"
+version = "0.1.0"
+description = "Face detection and clustering worker for the album pipeline"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "insightface>=0.7.3",
+  "onnxruntime>=1.17",
+  "opencv-python-headless>=4.9",
+  "scikit-learn>=1.4",
+  "numpy>=1.26,<3",
+]

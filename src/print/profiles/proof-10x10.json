@@ -1,0 +1,15 @@
+{
+  "id": "proof-10x10",
+  "name": "Generic 10x10 in print-ready PDF (no vendor)",
+  "vendor": "none",
+  "pageMm": { "w": 254, "h": 254 },
+  "bleedMm": 3,
+  "safeMm": 6,
+  "gutterSafeMm": 6,
+  "dpi": 300,
+  "minDpi": 180,
+  "pages": { "min": 2, "max": 200, "multiple": 2 },
+  "export": "pdf-pages",
+  "verified": true,
+  "notes": "Not tied to a lab. Use it to validate the pipeline and to look at a PDF."
+}

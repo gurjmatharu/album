@@ -1,0 +1,15 @@
+{
+  "id": "prodigi-layflat-12x12",
+  "name": "Prodigi layflat photo book 12x12 in (proof copy)",
+  "vendor": "prodigi",
+  "pageMm": { "w": 304.8, "h": 304.8 },
+  "bleedMm": 3,
+  "safeMm": 6,
+  "gutterSafeMm": 6,
+  "dpi": 300,
+  "minDpi": 180,
+  "pages": { "min": 18, "max": 122, "multiple": 2 },
+  "export": "pdf-pages",
+  "verified": false,
+  "notes": "Size and the 18-122 page range come from Prodigi's photo book guide; another Prodigi page says 24-122. Bleed, safe zone and whether the interior is ordered as single pages are assumptions until checked against the API reference and a test order."
+}

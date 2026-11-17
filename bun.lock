@@ -5,15 +5,15 @@
     "": {
       "name": "album",
       "dependencies": {
-        "@anthropic-ai/sdk": "latest",
+        "@anthropic-ai/sdk": "^1.10.0",
         "exifr": "^7.1.3",
         "pdf-lib": "^1.17.1",
-        "playwright": "latest",
+        "playwright": "^1.65.1",
         "sharp": "^0.34.0",
         "zod": "^4.6.7",
       },
       "devDependencies": {
-        "@types/bun": "latest",
+        "@types/bun": "^1.4.4",
         "typescript": "^5.6.0",
       },
     },

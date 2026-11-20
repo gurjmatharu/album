@@ -1,4 +1,4 @@
-import { templateById, type SlotDef, type Template } from "./catalog";
+import { templateById, type SlotDef, type Template, type TextDef } from "./catalog";
 import type { AlbumSpec, Face, Issue, Photo, Profile, Rect } from "./types";
 
 /** A face as it lands on the spread, in mm from the trim box's top-left corner. */
@@ -26,11 +26,19 @@ export interface PlacedSlot {
   faces: PlacedFace[];
 }
 
+export interface PlacedText {
+  def: TextDef;
+  value: string;
+  /** Trim-box mm. */
+  rect: Rect;
+}
+
 export interface PlacedSpread {
   id: string;
   chapter: string;
   template: Template;
   slots: PlacedSlot[];
+  text: PlacedText[];
 }
 
 export interface Layout {
@@ -162,7 +170,16 @@ export function resolveLayout(spec: AlbumSpec, photos: Map<string, Photo>, profi
         issues.push({ severity: "error", rule: "unknown-slot", spread: sp.id, slot: s.slot, message: `spread ${sp.id}: template ${template.id} has no slot "${s.slot}"` });
       }
     }
-    spreads.push({ id: sp.id, chapter: sp.chapter, template, slots });
+    const text: PlacedText[] = [];
+    for (const [id, value] of Object.entries(sp.text ?? {})) {
+      const def = template.text?.find((t) => t.id === id);
+      if (!def) {
+        issues.push({ severity: "error", rule: "unknown-text", spread: sp.id, message: `spread ${sp.id}: template ${template.id} has no text box "${id}"` });
+        continue;
+      }
+      if (value.trim()) text.push({ def, value, rect: { x: def.rect.x * profile.pageMm.w * 2, y: def.rect.y * profile.pageMm.h, w: def.rect.w * profile.pageMm.w * 2, h: def.rect.h * profile.pageMm.h } });
+    }
+    spreads.push({ id: sp.id, chapter: sp.chapter, template, slots, text });
   }
   return { profile, spreadMm: { w: profile.pageMm.w * 2, h: profile.pageMm.h }, spreads, issues };
 }

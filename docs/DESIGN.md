@@ -63,6 +63,28 @@ not artful.
 | `gallery` (default) | white | framed pictures, full bleed only for lead pictures | an exhibition catalogue |
 | `cinematic` | near-black | mostly full bleed, few pictures per spread | film stills |
 | `journal` | white | everything, up to six per spread | the whole day, busy |
+| `editorial` | white | the `ed-*` set and `pano`: offsets, scale contrast, type | a photo book from a good publisher |
+
+### The editorial set
+
+Almost every camera and phone delivers 3:2 to 16:9 landscapes, so the editorial slots are
+16:9 and a photo keeps its whole frame (a square or portrait slot throws a third of a
+landscape away). The design comes from placement, not from cropping:
+
+- **Offsets, not grids.** Two pictures sit on a diagonal (`ed-offset`, `ed-offset-rise`) or
+  step down a page (`ed-stack-*`), so the eye travels across the fold.
+- **Scale contrast.** A large picture running off one edge against a small one sharing its
+  baseline (`ed-bleed-detail`, `ed-detail-bleed`): the scene and a close look.
+- **White space is a picture too.** `ed-quiet` puts one modest picture alone on a page as a
+  pause between busy spreads.
+- **Statements.** `pano` (full bleed) and `ed-wide` (framed) cross the fold; only pictures
+  with nothing important in their middle go there. Without face data nothing checks this, so
+  the director has to look.
+- **Type.** `ed-opener` sets a date line, the title in Didot and an italic subtitle against
+  the picture's edges; `ed-closer` and `ed-quiet` take a line; some spreads take a caption.
+  Faces are Didot and Avenir Next (macOS system fonts, embedded in the PDF). The words live in
+  the spec (`spread.text`), never in a template. `text-outside-safe` and `text-on-fold` fail
+  the build when type lands where the trim or binding would take it.
 
 A theme does not regrade photos. If the photographer's edit is inconsistent, the lints will
 say so; matching the grade across pictures is not built (issue 22).

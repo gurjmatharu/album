@@ -10,6 +10,7 @@ import { lint, summarize } from "./lints";
 import { preflight } from "./preflight";
 import { readSourceDir, render } from "./render";
 import { THEMES } from "./themes";
+import { buildViewer } from "./view";
 import type { AlbumSpec, Issue, Photo } from "./types";
 import { listProfiles, loadPeople, loadPhotos, loadProfile, loadSpec, logStage, paths, readJson, writeJson } from "./work";
 
@@ -22,6 +23,7 @@ const USAGE = `album <verb> [options]
   lint                   check album.json; exit 1 on any error
   build                  lint, render proof.pdf and the print file, preflight them
   run <photo dir>        ingest, cull, direct, build
+  view                   write out/viewer/index.html: a page-turning viewer of the print file
   profiles               list print profiles
   themes                 list themes
 
@@ -164,6 +166,13 @@ async function main(): Promise<number> {
       await doDirect();
       const b = await doBuild(true);
       return a || b;
+    }
+    case "view": {
+      const spec = loadSpec(work);
+      const v = await buildViewer(spec, loadProfile(spec.profile), loadPhotos(work), readSourceDir(p.source), p.out);
+      console.log(`view: ${v.pages} pages -> ${v.index}`);
+      done("view", { pages: v.pages });
+      return 0;
     }
     case "profiles":
       for (const pr of listProfiles()) console.log(`${pr.id}  ${pr.pageMm.w}x${pr.pageMm.h} mm  ${pr.export}  ${pr.verified ? "verified" : "UNVERIFIED"}  ${pr.name}`);

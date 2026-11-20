@@ -16,7 +16,15 @@ bun install
 bun run album sample sample/photos        # 90 synthetic photos + faces.json + people.json
 bun run album run sample/photos --spreads 12 --title "Sample wedding"
 open work/out/proof.pdf                   # every spread with trim, safe zone, fold and faces drawn on
+bun run album view                        # page-turning viewer of the print file -> work/out/viewer/index.html
 ```
+
+The viewer is built from the print file itself, trimmed at the bleed, so what you flip
+through is what the lab gets. It needs a web server for its images (`python3 -m http.server
+--directory work/out/viewer`); `.claude/launch.json` has one for the Punta Cana work dir.
+
+Put `ALBUM_CHROMIUM="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"` in a
+local `.env` (gitignored, bun loads it) to render with an installed Chrome.
 
 With real photos:
 
@@ -25,7 +33,7 @@ bun run album ingest ~/Pictures/wedding
 uv run --project cv python cv/cv_worker.py faces ~/Pictures/wedding work   # see cv/README.md
 # edit work/people.json: name the clusters, set each person's minimum appearances
 bun run album cull
-bun run album direct --profile prodigi-layflat-12x12 --theme gallery --spreads 30 --title "..." [--director claude]
+bun run album direct --profile prodigi-layflat-297 --theme gallery --spreads 30 --title "..." [--director claude]
 bun run album build
 ```
 
@@ -44,6 +52,7 @@ written and lists what failed. `bun test` runs the unit tests and one end-to-end
 | `out/proof.pdf` | `build` | summary and lint list, then every spread with guides |
 | `out/print.pdf` or `out/spreads/*.jpg` | `build` | what the lab gets, per the print profile |
 | `out/lint.json`, `out/preflight.json` | `build` | the checks, as data |
+| `out/viewer/` | `view` | the page-turning viewer: `index.html`, trimmed pages, cover image |
 | `log.jsonl` | every stage | one line per stage: wall time, dollars |
 
 ## Layout of the repo
@@ -56,6 +65,7 @@ src/layout.ts          spec + photos + profile -> placed slots; the crop solver
 src/lints.ts           every check a script can make
 src/render.ts          assets at print size, HTML, PDF / JPEG spreads, proof
 src/preflight.ts       opens the output and confirms it is what was asked for
+src/view.ts            the page-turning viewer, built from the print file
 src/ingest.ts          measure photos       src/cull.ts   bursts, blur, best-of
 src/director/          heuristic.ts ($0 baseline), claude.ts (model director)
 src/print/profiles/    one JSON per lab product

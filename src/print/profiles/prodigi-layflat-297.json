@@ -1,0 +1,15 @@
+{
+  "id": "prodigi-layflat-297",
+  "name": "Prodigi layflat photo book 297x297 mm (11.7 in)",
+  "vendor": "prodigi",
+  "pageMm": { "w": 297, "h": 297 },
+  "bleedMm": 0,
+  "safeMm": 10,
+  "gutterSafeMm": 6,
+  "dpi": 300,
+  "minDpi": 180,
+  "pages": { "min": 18, "max": 122, "multiple": 2 },
+  "export": "pdf-pages",
+  "verified": false,
+  "notes": "From Prodigi's layflat print guide (2026-11-20): single pages at book size, no bleed or crop marks (Prodigi adds them), 10 mm safe margin on outer edges, 18-122 pages in even counts. Unconfirmed until a test order: the exact SKU; whether the page range counts the covers (the guide makes PDF page 1 the front cover and the last page the back cover, which this pipeline does not draw yet, issue 5); and RGB vs PDF/X-4 output (issue 7). gutterSafeMm is this pipeline's own no-face band around the fold, not a Prodigi number."
+}

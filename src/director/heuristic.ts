@@ -126,25 +126,30 @@ export function directHeuristic(photos: Photo[], scores: Map<string, number>, op
   const recent: string[] = [];
 
   parts.forEach((part, ci) => {
-    for (const group of split(part, counts[ci]!)) {
+    const groups = split(part, counts[ci]!);
+    groups.forEach((group, gi) => {
+      const first = spreads.length === 0;
+      const last = ci === parts.length - 1 && gi === groups.length - 1;
       let best: Fill | undefined;
       for (const t of CATALOG) {
         if (!theme.templates.includes(t.id) || t.slots.length > group.length) continue;
+        if ((t.place === "first" && !first) || (t.place === "last" && !last)) continue;
         const f = fill(t, group, score, opts.profile);
         if (f.slots.length < t.slots.length) continue;
         if (recent[recent.length - 1] === t.id) f.cost += 1.5;
         else if (recent[recent.length - 2] === t.id) f.cost += 0.5;
         if (!best || f.cost < best.cost) best = f;
       }
-      if (!best) continue;
+      if (!best) return;
       recent.push(best.template.id);
       spreads.push({
         id: `s${String(spreads.length + 1).padStart(2, "0")}`,
         chapter: `Chapter ${ci + 1}`,
         template: best.template.id,
+        ...(best.template.place === "first" && best.template.text?.some((x) => x.id === "title") ? { text: { title: opts.title } } : {}),
         slots: best.slots,
       });
-    }
+    });
   });
 
   return { version: 1, title: opts.title, profile: opts.profile.id, theme: theme.id, background: theme.background, people: opts.people, spreads };

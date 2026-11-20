@@ -40,11 +40,22 @@ async function asset(slot: PlacedSlot, profile: Profile, sourceDir: string, cach
   return file;
 }
 
-function spreadHtml(sp: PlacedSpread, files: Map<PlacedSlot, string>, layout: Layout, guides: boolean): string {
+/** Ink for type on a page of this colour: near-black on light paper, warm white on dark. */
+function ink(bg: string): string {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(bg.trim());
+  const l = m ? (0.2126 * parseInt(m[1]!, 16) + 0.7152 * parseInt(m[2]!, 16) + 0.0722 * parseInt(m[3]!, 16)) / 255 : 1;
+  return l > 0.5 ? "#1d1b19" : "#f2ede6";
+}
+
+function spreadHtml(sp: PlacedSpread, files: Map<PlacedSlot, string>, layout: Layout, guides: boolean, bg: string): string {
   const b = layout.profile.bleedMm;
   const { w: W, h: H } = layout.spreadMm;
   const imgs = sp.slots
     .map((s) => `<img src="${pathToFileURL(files.get(s)!).href}" style="left:${mm(s.rect.x + b)};top:${mm(s.rect.y + b)};width:${mm(s.rect.w)};height:${mm(s.rect.h)}">`)
+    .join("");
+  const just = { top: "flex-start", bottom: "flex-end", middle: "center" } as const;
+  const words = sp.text
+    .map((t) => `<div class="tx tx-${t.def.role}" style="left:${mm(t.rect.x + b)};top:${mm(t.rect.y + b)};width:${mm(t.rect.w)};height:${mm(t.rect.h)};text-align:${t.def.align};justify-content:${just[t.def.anchor]};color:${ink(bg)}"><span>${esc(t.value).replace(/\n/g, "<br>")}</span></div>`)
     .join("");
   let over = "";
   if (guides) {
@@ -60,7 +71,7 @@ function spreadHtml(sp: PlacedSpread, files: Map<PlacedSlot, string>, layout: La
       }
     }
   }
-  return `<div class="spread" style="width:${mm(W + 2 * b)};height:${mm(H + 2 * b)}">${imgs}${over}</div>`;
+  return `<div class="spread" style="width:${mm(W + 2 * b)};height:${mm(H + 2 * b)}">${imgs}${words}${over}</div>`;
 }
 
 const BASE_CSS = `
@@ -73,6 +84,12 @@ html,body{background:#fff}
 .spread{position:absolute;top:0}
 .spread img{position:absolute;display:block}
 .g{position:absolute;pointer-events:none}
+/* Type. System faces on macOS, embedded in the PDF by Chromium; the fallbacks keep it readable elsewhere. */
+.tx{position:absolute;display:flex;flex-direction:column;font-kerning:normal;font-variant-ligatures:common-ligatures}
+.tx-display{font-family:"Didot","Bodoni 72",Georgia,serif;font-size:92pt;line-height:.92;letter-spacing:-.015em;font-weight:400}
+.tx-subtitle{font-family:"Didot","Bodoni 72",Georgia,serif;font-style:italic;font-size:21pt;line-height:1.3}
+.tx-kicker{font-family:"Avenir Next","Avenir",Helvetica,sans-serif;font-size:9pt;line-height:1.6;letter-spacing:.34em;text-transform:uppercase;font-weight:500}
+.tx-caption{font-family:"Avenir Next","Avenir",Helvetica,sans-serif;font-size:8.5pt;line-height:1.6;letter-spacing:.04em;opacity:.7}
 .trim{border:0.3mm solid #e11}
 .safe{border:0.3mm dashed #1a4}
 .fold{background:rgba(0,90,255,.18)}
@@ -95,7 +112,7 @@ function printHtml(layout: Layout, files: Map<PlacedSlot, string>, bg: string): 
   for (const sp of layout.spreads) {
     const offsets = byPage ? [0, -p.pageMm.w] : [0];
     for (const off of offsets) {
-      sheets.push(`<div class="sheet" style="width:${mm(w)};height:${mm(h)};background:${bg}">${spreadHtml(sp, files, layout, false).replace('class="spread" style="', `class="spread" style="left:${mm(off)};`)}</div>`);
+      sheets.push(`<div class="sheet" style="width:${mm(w)};height:${mm(h)};background:${bg}">${spreadHtml(sp, files, layout, false, bg).replace('class="spread" style="', `class="spread" style="left:${mm(off)};`)}</div>`);
     }
   }
   return { html: doc(`@page{size:${mm(w)} ${mm(h)};margin:0}`, sheets.join("")), widthMm: w, heightMm: h, sheets: sheets.length };
@@ -125,7 +142,7 @@ function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, strin
       .map((s) => `${s.def.id}: ${esc(s.photo.path)} ${Math.round(s.effDpi)} dpi${s.faces.filter((f) => f.person).length ? " [" + s.faces.map((f) => f.person).filter(Boolean).join(", ") + "]" : ""}`)
       .join(" &nbsp;|&nbsp; ");
     return `<div class="sheet" style="width:${mm(w)};height:${mm(h)}">
-<div style="position:absolute;left:${mm(pad)};top:${mm(pad)};width:${mm(layout.spreadMm.w + 2 * b)};height:${mm(layout.spreadMm.h + 2 * b)};background:${spec.background};outline:0.2mm solid #999">${spreadHtml(sp, files, layout, true)}</div>
+<div style="position:absolute;left:${mm(pad)};top:${mm(pad)};width:${mm(layout.spreadMm.w + 2 * b)};height:${mm(layout.spreadMm.h + 2 * b)};background:${spec.background};outline:0.2mm solid #999">${spreadHtml(sp, files, layout, true, spec.background)}</div>
 <div class="foot" style="left:${mm(pad)};top:${mm(pad + layout.spreadMm.h + 2 * b + 3)};width:${mm(w - 2 * pad)}"><b>${esc(sp.id)}</b> ${esc(sp.chapter)} · ${esc(sp.template.id)}<br>${rows}${mine.length ? `<ul>${mine.map(li).join("")}</ul>` : ""}</div></div>`;
   });
   const css = `@page{size:${mm(w)} ${mm(h)};margin:0}

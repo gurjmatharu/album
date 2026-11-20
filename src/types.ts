@@ -65,6 +65,8 @@ export const SpecSchema = z.object({
       id: z.string(),
       chapter: z.string(),
       template: z.string(),
+      /** Words for the template's text boxes, by box id (a title, a date, a short caption). */
+      text: z.record(z.string(), z.string()).optional(),
       slots: z.array(
         z.object({
           slot: z.string(),

@@ -7,12 +7,49 @@ spec does not change between them, only `--profile`.
 | Profile | Use | Export | Verified |
 |---|---|---|---|
 | `proof-10x10` | validating the pipeline, reading a PDF | one PDF page per page | yes (no lab to match) |
-| `prodigi-layflat-12x12` | first physical copy | one PDF page per page | **no** |
+| `prodigi-layflat-297` | first physical copy, 297x297 mm (11.7 in) | one PDF page per page, no bleed | **no** |
 | `whcc-album-10x10` | the final album | one JPEG per spread | **no, placeholder numbers** |
 
 A profile sets page size, bleed, safe margin, the no-face band around the fold, target and
 minimum resolution, the page range and the export shape. `verified: false` puts a warning on
 every build until someone checks the numbers against the lab's own spec.
+
+## Lab research, 2026-11-20 (from the labs' own docs; nothing ordered, no account used)
+
+This overrides the older notes below where they disagree. Profiles stay `verified: false`
+until a test order.
+
+**Prodigi** (API v5, `https://api.prodigi.com/v5`, `X-API-Key`; a `sandbox_` key is never
+printed or charged) [OpenAPI spec](https://www.prodigi.com/print-api/docs/openapi.yml)
+- **There is no 12x12 in layflat.** Sizes are 210x210 mm, 297x297 mm, A4 landscape and A4
+  portrait; SKUs start `BOOK-FE` (e.g. `BOOK-FE-A4-L-LF-G`).
+  [product page](https://www.prodigi.com/products/books-and-magazines/layflat-photo-book/)
+- Interior: one PDF of **single pages**, page size = book size, **no bleed and no crop
+  marks** (Prodigi adds them), **10 mm safe margin** on outer edges, none at the inner edge on
+  layflat. 300 dpi, RGB, PDF/X-4. PDF page 1 is the front cover and the last is the back
+  cover; a blank page sits inside each cover.
+  [print guide](https://www.prodigi.com/download/print-guides/layflat-photo-book-print-guide.pdf)
+- 18–122 pages, even counts. Spine is its own `spine` print area; its width comes from
+  `GET /catalogue/variants/{sku}/spine?pageCount=&countryCode=CA&stateOrCounty=..`.
+- Flow: `POST /quotes/order`, `POST /orders` (assets by **public URL**), `POST
+  /orders/{id}:submit`, webhooks. Layflat is made in the EU and US only; import taxes to
+  Canada fall on the recipient. [taxation FAQ](https://www.prodigi.com/faq/taxation/)
+
+**WHCC**
+- The Order Submit API is **legacy** and issues no new credentials. The new API (Bearer key,
+  stage `https://apis-stage.whcc.com/api`, no fees) requires albums and layflat books to be
+  **designed in WHCC's hosted editor**: no PDF, no headless path yet ("not expected until
+  December"). [albums guide](https://www.whcc.com/developer/docs/guides/albums/index.html.md),
+  [FAQ](https://www.whcc.com/developer/docs/faq/index.html.md)
+- Layflat 10–40 spreads; 12x12 lustre is $137 USD for 10 spreads plus $7 per spread.
+  [layflat](https://www.whcc.com/products/layflat-books.md)
+- Canada: WHCC is importer of record (GST/HST on the invoice, nothing due at the door);
+  shipping $7.95 plus 10% of the order plus the current tariff.
+
+**What this means here:** the old `prodigi-layflat-12x12` profile described a product Prodigi does
+not sell; it is replaced by `prodigi-layflat-297` with no bleed and a 10 mm safe margin. WHCC cannot take
+this pipeline's output through its API until headless ordering ships; its spreads would be
+uploaded into the editor by hand.
 
 ## What is known, with sources
 

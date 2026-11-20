@@ -35,8 +35,12 @@ async function pdfChecks(label: string, file: string, count: number, widthMm: nu
 /** Mean absolute difference, 0-255, above which a PDF page does not look like its sheet. */
 const MAX_DIFF = 10;
 
+/**
+ * The blur takes out resampling noise in fine detail (foliage scored 10.9 unblurred on a
+ * correct page, 3.4 blurred) and keeps what the check is for: shifted or scaled content.
+ */
 async function grey(file: string, w: number, h: number): Promise<Buffer> {
-  return sharp(file).flatten({ background: "#fff" }).resize(w, h, { fit: "fill" }).greyscale().raw().toBuffer();
+  return sharp(file).flatten({ background: "#fff" }).resize(w, h, { fit: "fill" }).greyscale().blur(2).raw().toBuffer();
 }
 
 /**

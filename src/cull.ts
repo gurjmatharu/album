@@ -1,4 +1,4 @@
-import { hamming } from "./lints";
+import { hamming, nearDuplicate } from "./lints";
 import type { Person, Photo } from "./types";
 
 export interface Select {
@@ -34,7 +34,10 @@ export function cull(photos: Photo[], people: Person[]): Select[] {
   for (const ph of sorted) {
     const last = bursts[bursts.length - 1];
     const prev = last?.[last.length - 1];
-    const close = prev && (Date.parse(ph.takenAt) - Date.parse(prev.takenAt)) / 1000 <= BURST_SECONDS && hamming(ph.dhash, prev.dhash) <= BURST_BITS;
+    // A burst is a fast sequence of similar frames, or anything the near-duplicate lint
+    // would reject beside a frame already in it: the cull must not keep two of those.
+    const burst = prev && (Date.parse(ph.takenAt) - Date.parse(prev.takenAt)) / 1000 <= BURST_SECONDS && hamming(ph.dhash, prev.dhash) <= BURST_BITS;
+    const close = burst || (last?.some((q) => nearDuplicate(ph, q)) ?? false);
     if (close) last!.push(ph);
     else bursts.push([ph]);
   }

@@ -53,6 +53,15 @@ export function lint(spec: AlbumSpec, layout: Layout): Issue[] {
     run = prev && prev.template.id === sp.template.id ? run + 1 : 1;
     if (run === 3) warn("pacing", `spread ${sp.id}: third ${sp.template.id} in a row`, { spread: sp.id });
 
+    // Type inside the safe area and off the fold, or the lab's trim and the binding eat it.
+    const W = layout.spreadMm.w, H = layout.spreadMm.h, g = p.gutterSafeMm;
+    for (const t of sp.text) {
+      const r = t.rect;
+      const out = Math.max(p.safeMm - r.x, p.safeMm - r.y, r.x + r.w - (W - p.safeMm), r.y + r.h - (H - p.safeMm));
+      if (out > 0.01) err("text-outside-safe", `spread ${sp.id}: text box ${t.def.id} runs ${out.toFixed(1)} mm outside the ${p.safeMm} mm safe margin`, { spread: sp.id });
+      if (r.x < W / 2 + g && r.x + r.w > W / 2 - g) err("text-on-fold", `spread ${sp.id}: text box ${t.def.id} crosses the fold band (${g} mm either side)`, { spread: sp.id });
+    }
+
     if (theme && !theme.templates.includes(sp.template.id)) {
       err("off-theme", `spread ${sp.id}: template ${sp.template.id} is not part of the ${theme.id} theme`, { spread: sp.id });
     }

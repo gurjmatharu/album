@@ -1,6 +1,6 @@
 # Open issues
 
-State on 2026-11-17, after the first scaffold. Numbered so commits and notes can refer to
+State on 2026-11-20 (first real album: 87 photos, Punta Cana 2022). Numbered so commits and notes can refer to
 them. Close an issue by deleting it here in the commit that fixes it.
 
 ## Blocks a real album
@@ -18,12 +18,14 @@ them. Close an issue by deleting it here in the commit that fixes it.
    judge a photo, how many photos fit in one call, and the cost per album. It sends the
    `server-side-fallback-2026-07-01` beta with `fallbacks: "default"`.
 
-3. **The WHCC profile is a placeholder.** Size, bleed, page range and the JPEG-per-spread
+3. **The WHCC profile is a placeholder, and the API cannot take a finished album yet.** WHCC's
+   new API needs albums designed in its hosted editor (see PRINT.md, 2026-11-20). Size, bleed, page range and the JPEG-per-spread
    export are guesses. Needs a WHCC account, API credentials and the product catalog. Open
    questions are in [PRINT.md](PRINT.md): flush mount through the API, file format, and
    duties or surtax on an album shipped to Canada.
 
-4. **The Prodigi profile is unverified.** Page range (18 or 24 minimum), bleed, safe
+4. **The Prodigi profile is unverified.** `prodigi-layflat-297` follows Prodigi's print guide (no
+   bleed, 10 mm safe margin; there is no 12x12 in layflat). Still true: Page range (18 or 24 minimum), bleed, safe
    margins and the interior file shape need the API reference and one test order.
 
 5. **No cover and no spine.** Only interior spreads are designed and rendered. Both labs
@@ -81,7 +83,9 @@ them. Close an issue by deleting it here in the commit that fixes it.
     left/right has to be checked on real photos before it is trusted.
 
 24. **Templates have fixed margins.** A theme picks which templates are allowed and the page
-    colour, not margin or gap sizes. No typography: no titles, dates or captions.
+    colour, not margin or gap sizes. Type exists only in the editorial templates (title,
+    subtitle, date line, caption); no director writes it yet, so words are hand-written in
+    `album.json`. Nothing measures whether words fit their box.
 
 ## Plumbing
 

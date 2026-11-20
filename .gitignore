@@ -5,3 +5,11 @@ sample/
 .env
 cv/.venv/
 __pycache__/
+.DS_Store
+# photos never go in git (CLAUDE.md)
+Punta Cana 2022/
+*.jpg
+*.JPG
+*.jpeg
+*.heic
+*.HEIC

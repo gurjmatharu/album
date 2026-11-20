@@ -12,6 +12,7 @@ import { hamming, lint } from "../src/lints";
 import { preflight } from "../src/preflight";
 import { render } from "../src/render";
 import type { AlbumSpec, Photo, Profile } from "../src/types";
+import { buildViewer, dateRange } from "../src/view";
 import { loadPeople, loadPhotos, loadProfile, paths } from "../src/work";
 
 const profile: Profile = loadProfile("proof-10x10");
@@ -41,6 +42,36 @@ describe("catalog", () => {
         }
       }
     }
+  });
+});
+
+describe("editorial templates", () => {
+  const apart = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
+    a.x + a.w <= b.x + 1e-9 || b.x + b.w <= a.x + 1e-9 || a.y + a.h <= b.y + 1e-9 || b.y + b.h <= a.y + 1e-9;
+
+  test("a text box is on one page, clear of every picture and of the fold", () => {
+    for (const t of CATALOG) {
+      for (const box of t.text ?? []) {
+        expect(box.rect.x).toBeGreaterThanOrEqual(0.03);
+        expect(box.rect.y).toBeGreaterThanOrEqual(0.03);
+        expect(box.rect.x + box.rect.w).toBeLessThanOrEqual(0.97);
+        expect(box.rect.y + box.rect.h).toBeLessThanOrEqual(0.97);
+        expect(box.rect.x + box.rect.w <= 0.47 || box.rect.x >= 0.53).toBe(true);
+        for (const s of t.slots) expect(apart(box.rect, s.rect)).toBe(true);
+      }
+    }
+  });
+
+  test("a 16:9 photo fills an editorial landscape slot without losing any of it", () => {
+    const off = CATALOG.find((t) => t.id === "ed-offset")!.slots[0]!;
+    const r = solveCrop(photo("a", { width: 6000, height: 3375 }), off, profile);
+    expect((r.crop.w * r.crop.h) / (6000 * 3375)).toBeGreaterThan(0.99);
+  });
+
+  test("words for a text box the template does not have are an error", () => {
+    const s = spec([{ id: "s01", chapter: "c", template: "ed-quiet", text: { nope: "x" }, slots: [{ slot: "a", photo: "a" }] }]);
+    const out = lint({ ...s, theme: "editorial" }, resolveLayout({ ...s, theme: "editorial" }, new Map([["a", photo("a")]]), profile));
+    expect(out.map((i) => i.rule)).toContain("unknown-text");
   });
 });
 
@@ -151,6 +182,15 @@ describe("cull and director", () => {
     expect(keep).toEqual(["b", "c"]);
   });
 
+  test("the cull keeps one of two frames the near-duplicate lint would reject", () => {
+    // 6 s apart: outside the 4 s burst window, inside the lint's 20 s near-duplicate window.
+    const ps = [
+      photo("a", { sharpness: 90, dhash: "177b7f3353537727", takenAt: "2026-06-20T15:00:00.000Z" }),
+      photo("b", { sharpness: 100, dhash: "177b7f3393537627", takenAt: "2026-06-20T15:00:06.000Z" }),
+    ];
+    expect(cull(ps, []).filter((s) => s.keep).map((s) => s.id)).toEqual(["b"]);
+  });
+
   test("laplacian variance is zero on a flat image and positive on an edge", () => {
     expect(laplacianVariance(new Uint8Array(100).fill(90), 10, 10)).toBe(0);
     const edge = new Uint8Array(100).map((_, i) => (i % 10 < 5 ? 0 : 255));
@@ -162,6 +202,14 @@ describe("cull and director", () => {
     expect(chapters(ps, 30, 10).map((c) => c.length)).toEqual([3, 2, 1]);
     expect(chapters(ps, 30, 2).map((c) => c.length)).toEqual([5, 1]);
     expect(allocate([40, 10, 10], 6).reduce((a, b) => a + b, 0)).toBe(6);
+  });
+});
+
+describe("viewer", () => {
+  test("date range reads naturally", () => {
+    expect(dateRange(["2022-12-20T22:39:25.000Z", "2022-12-19T19:07:10.000Z"])).toBe("December 19–20, 2022");
+    expect(dateRange(["2022-12-30T10:00:00.000Z", "2023-01-02T10:00:00.000Z"])).toBe("December 30, 2022 – January 2, 2023");
+    expect(dateRange(["2022-12-19T10:00:00.000Z"])).toBe("December 19, 2022");
   });
 });
 
@@ -192,5 +240,11 @@ describe("end to end on the synthetic sample", () => {
     const checks = await preflight(out);
     expect(checks.filter((c) => !c.ok)).toEqual([]);
     expect(checks.length).toBeGreaterThanOrEqual(5);
+
+    const view = await buildViewer(album, small, photos, join(dir, "photos"), p.out);
+    expect(view.pages).toBe(10);
+    const html = await Bun.file(view.index).text();
+    expect(html).toContain('"spreads":[');
+    expect(await Bun.file(join(p.out, "viewer", "pages", "p010.jpg")).exists()).toBe(true);
   }, 180_000);
 });

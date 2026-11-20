@@ -97,6 +97,3 @@ them. Close an issue by deleting it here in the commit that fixes it.
 
 18. **No spend cap.** `log.jsonl` records dollars per stage, but nothing stops a run at a
     budget. Add before any stage loops over photos with a model.
-
-19. **Not on GitHub.** The repo was scaffolded in a cloud session with no remote; it needs an
-    empty private repo to push to.

@@ -7,8 +7,8 @@ import { CATALOG } from "../src/catalog";
 import { cull } from "../src/cull";
 import { allocate, chapters, directHeuristic } from "../src/director/heuristic";
 import { ingest, laplacianVariance } from "../src/ingest";
-import { resolveLayout, solveCrop } from "../src/layout";
-import { hamming, lint } from "../src/lints";
+import { resolveCover, resolveLayout, solveCrop } from "../src/layout";
+import { hamming, lint, lintCover } from "../src/lints";
 import { preflight } from "../src/preflight";
 import { render } from "../src/render";
 import type { AlbumSpec, Photo, Profile } from "../src/types";
@@ -240,6 +240,25 @@ describe("creative direction", () => {
   });
 });
 
+describe("cover and spine", () => {
+  const ps = new Map([["a", photo("a")]]);
+  const base = { ...spec([]), theme: "editorial" };
+
+  test("a cover must use a cover layout, and an interior spread must not", () => {
+    const bad = { ...base, cover: { template: "ed-offset", slots: [{ slot: "a", photo: "a" }] } };
+    expect(lintCover(bad, resolveCover(bad, ps, profile)).map((i) => i.rule)).toContain("not-a-cover");
+    const inside = { ...base, spreads: [{ id: "s01", chapter: "c", template: "cover-inset", slots: [{ slot: "a", photo: "a" }] }] };
+    expect(lint(inside, resolveLayout(inside, ps, profile)).map((i) => i.rule)).toContain("cover-in-interior");
+  });
+
+  test("an estimated spine width is a warning until the lab gives the real one", () => {
+    const est = { ...base, cover: { template: "cover-inset", slots: [{ slot: "a", photo: "a" }], spine: { widthMm: 15, estimated: true } } };
+    const issues = lintCover(est, resolveCover(est, ps, profile));
+    expect(issues.find((i) => i.rule === "spine-estimated")?.severity).toBe("warning");
+    expect(issues.filter((i) => i.severity === "error")).toEqual([]);
+  });
+});
+
 describe("print prep", () => {
   const even: PrepStats = { mean: [0.5, 0.5, 0.5], p05: 0.1, p25: 0.35, p50: 0.5, p95: 0.85 };
   const backlit: PrepStats = { mean: [0.45, 0.42, 0.4], p05: 0.03, p25: 0.12, p50: 0.35, p95: 0.97 };
@@ -300,7 +319,11 @@ describe("end to end on the synthetic sample", () => {
     expect(issues.filter((i) => i.severity === "error")).toEqual([]);
 
     const p = paths(work);
-    const out = await render(album, layout, issues, join(dir, "photos"), p.assets, p.out, true);
+    album.cover = { template: "cover-inset", slots: [{ slot: "a", photo: kept[0]!.id }], text: { title: "Test" }, spine: { widthMm: 12, text: "Test" } };
+    const coverLayout = resolveCover(album, new Map(photos.map((x) => [x.id, x])), small);
+    expect(lintCover(album, coverLayout).filter((i) => i.severity === "error")).toEqual([]);
+    const out = await render(album, layout, issues, join(dir, "photos"), p.assets, p.out, true, coverLayout);
+    expect(out.expected.extras?.map((x) => x.label)).toEqual(["cover.pdf", "spine.pdf"]);
     const checks = await preflight(out);
     expect(checks.filter((c) => !c.ok)).toEqual([]);
     expect(checks.length).toBeGreaterThanOrEqual(5);

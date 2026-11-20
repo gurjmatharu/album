@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { chromium, type Browser } from "playwright";
+import { PDFDocument } from "pdf-lib";
 import sharp from "sharp";
 import type { Layout, PlacedSlot, PlacedSpread } from "./layout";
 import { applyPrep, describePrep, measure, planPrep, spreadMean, type Prep, type PrepStats } from "./prep";
@@ -117,7 +118,7 @@ function printHtml(layout: Layout, files: Map<PlacedSlot, string>, bg: string): 
 }
 
 /** The file a person reads: a summary page, then every spread with trim, safe zone, fold and faces drawn on. */
-function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, string>, issues: Issue[], preps: Map<PlacedSlot, Prep>): { html: string; widthMm: number; heightMm: number; sheets: number } {
+function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, string>, issues: Issue[], preps: Map<PlacedSlot, Prep>, coverSpread?: PlacedSpread): { html: string; widthMm: number; heightMm: number; sheets: number } {
   const p = layout.profile;
   const b = p.bleedMm;
   const pad = 12;
@@ -134,14 +135,14 @@ function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, strin
 <p class="${errors.length ? "error" : "ok"}">${errors.length ? `${errors.length} errors: this album is not ready to print.` : "No lint errors."} ${warnings.length} warnings.</p>
 <p>Red line: trim. Green dashes: safe zone. Blue band: fold. Green boxes: faces; red boxes: faces cut or on the fold.</p>
 <ul>${[...errors, ...warnings].slice(0, 60).map(li).join("")}</ul></div>`;
-  const sheets = layout.spreads.map((sp) => {
+  const sheets = (coverSpread ? [coverSpread, ...layout.spreads] : layout.spreads).map((sp) => {
     const mine = issues.filter((i) => i.spread === sp.id);
     const rows = sp.slots
       .map((s) => `${s.def.id}: ${esc(s.photo.path)} ${Math.round(s.effDpi)} dpi${s.faces.filter((f) => f.person).length ? " [" + s.faces.map((f) => f.person).filter(Boolean).join(", ") + "]" : ""}${preps.get(s) ? ` (${esc(describePrep(preps.get(s)!))})` : ""}`)
       .join(" &nbsp;|&nbsp; ");
     return `<div class="sheet" style="width:${mm(w)};height:${mm(h)}">
 <div style="position:absolute;left:${mm(pad)};top:${mm(pad)};width:${mm(layout.spreadMm.w + 2 * b)};height:${mm(layout.spreadMm.h + 2 * b)};background:${sp.background ?? spec.background};outline:0.2mm solid #999">${spreadHtml(sp, files, layout, true, sp.background ?? spec.background)}</div>
-<div class="foot" style="left:${mm(pad)};top:${mm(pad + layout.spreadMm.h + 2 * b + 3)};width:${mm(w - 2 * pad)}"><b>${esc(sp.id)}</b> ${esc(sp.chapter)} · ${esc(sp.template.id)}<br>${rows}${mine.length ? `<ul>${mine.map(li).join("")}</ul>` : ""}</div></div>`;
+<div class="foot" style="left:${mm(pad)};top:${mm(pad + layout.spreadMm.h + 2 * b + 3)};width:${mm(w - 2 * pad)}"><b>${esc(sp.id)}</b> ${sp === coverSpread ? "left page: back cover, right page: front cover (spine is its own file)" : esc(sp.chapter)} · ${esc(sp.template.id)}<br>${rows}${mine.length ? `<ul>${mine.map(li).join("")}</ul>` : ""}</div></div>`;
   });
   const css = `@page{size:${mm(w)} ${mm(h)};margin:0}
 body{font:11pt/1.35 system-ui,sans-serif;color:#111}
@@ -167,11 +168,42 @@ export interface RenderOutput {
   expected: {
     print?: { kind: "pdf" | "jpg"; count: number; widthMm: number; heightMm: number; dpi: number };
     proof: { count: number; widthMm: number; heightMm: number };
+    /** cover.pdf, spine.pdf, book.pdf: each checked for page count and size. */
+    extras?: { label: string; file: string; count: number; widthMm: number; heightMm: number }[];
   };
 }
 
+/** Front and back cover as two pages (front first), each a page plus bleed, cut from the cover spread. */
+function coverHtml(cover: PlacedSpread, layout: Layout, files: Map<PlacedSlot, string>, bg: string): { html: string; widthMm: number; heightMm: number } {
+  const p = layout.profile;
+  const b = p.bleedMm;
+  const w = p.pageMm.w + 2 * b;
+  const h = layout.spreadMm.h + 2 * b;
+  const paper = cover.background ?? bg;
+  const sheets = [-p.pageMm.w, 0].map(
+    (off) => `<div class="sheet" style="width:${mm(w)};height:${mm(h)};background:${paper}">${spreadHtml(cover, files, layout, false, paper).replace('class="spread" style="', `class="spread" style="left:${mm(off)};`)}</div>`,
+  );
+  return { html: doc(`@page{size:${mm(w)} ${mm(h)};margin:0}`, sheets.join("")), widthMm: w, heightMm: h };
+}
+
+/** The spine: one page, its width from the lab, the words running top to bottom as the book lies face up. */
+function spineHtml(spec: AlbumSpec, layout: Layout): { html: string; widthMm: number; heightMm: number } | undefined {
+  const sp = spec.cover?.spine;
+  if (!sp) return undefined;
+  const b = layout.profile.bleedMm;
+  const w = sp.widthMm + 2 * b;
+  const h = layout.spreadMm.h + 2 * b;
+  const paper = sp.background ?? spec.cover?.background ?? spec.background;
+  const size = Math.max(5, Math.min(9, sp.widthMm * 0.45 * 2.835)); // pt: about 45% of the spine's width, 5 to 9 pt
+  const words = esc(sp.text ?? spec.title);
+  const body = `<div class="sheet" style="width:${mm(w)};height:${mm(h)};background:${paper}"><div class="tx tx-kicker" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;writing-mode:vertical-rl;font-size:${size.toFixed(1)}pt;color:${ink(paper)}"><span>${words}</span></div></div>`;
+  return { html: doc(`@page{size:${mm(w)} ${mm(h)};margin:0}`, body), widthMm: w, heightMm: h };
+}
+
 /** Always writes proof.pdf. Writes the print file only when `withPrint` is set (the caller withholds it on lint errors). */
-export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], sourceDir: string, cacheDir: string, outDir: string, withPrint: boolean): Promise<RenderOutput> {
+export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], sourceDir: string, cacheDir: string, outDir: string, withPrint: boolean, coverLayout?: Layout): Promise<RenderOutput> {
+  const cover = coverLayout?.spreads[0];
+  const groups = cover ? [...layout.spreads, cover] : layout.spreads;
   const p = layout.profile;
   mkdirSync(outDir, { recursive: true });
   const files = new Map<PlacedSlot, string>();
@@ -179,13 +211,13 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
   const preps = new Map<PlacedSlot, Prep>();
   if (spec.prep !== "off") {
     const stats = new Map<string, PrepStats>();
-    for (const sp of layout.spreads) for (const s of sp.slots) if (!stats.has(s.photo.id)) stats.set(s.photo.id, await measure(join(sourceDir, s.photo.path)));
-    for (const sp of layout.spreads) {
+    for (const sp of groups) for (const s of sp.slots) if (!stats.has(s.photo.id)) stats.set(s.photo.id, await measure(join(sourceDir, s.photo.path)));
+    for (const sp of groups) {
       const target = spreadMean(sp.slots.map((s) => stats.get(s.photo.id)!));
       for (const s of sp.slots) preps.set(s, planPrep(stats.get(s.photo.id)!, target));
     }
   }
-  for (const sp of layout.spreads) for (const s of sp.slots) files.set(s, await asset(s, p, sourceDir, cacheDir, preps.get(s)));
+  for (const sp of groups) for (const s of sp.slots) files.set(s, await asset(s, p, sourceDir, cacheDir, preps.get(s)));
 
   const browser = await launch();
   try {
@@ -197,7 +229,7 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
       await page.pdf({ path: join(outDir, name), width: mm(w), height: mm(h), printBackground: true, preferCSSPageSize: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });
     };
 
-    const proof = proofHtml(spec, layout, files, issues, preps);
+    const proof = proofHtml(spec, layout, files, issues, preps, cover);
     await toPdf(proof.html, "proof.pdf", proof.widthMm, proof.heightMm);
 
     const checkDir = join(outDir, "check");
@@ -206,6 +238,7 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
     const proofOut = { count: proof.sheets, widthMm: proof.widthMm, heightMm: proof.heightMm };
     rmSync(join(outDir, "print.pdf"), { force: true });
     rmSync(join(outDir, "spreads"), { recursive: true, force: true });
+    for (const f of ["cover.pdf", "spine.pdf", "book.pdf"]) rmSync(join(outDir, f), { force: true });
     if (!withPrint) return { proof: join(outDir, "proof.pdf"), expected: { proof: proofOut } };
 
     const pr = printHtml(layout, files, spec.background);
@@ -235,12 +268,35 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
         await sharp(png).resize({ width: CHECK_WIDTH }).png().toFile(join(checkDir, `sheet-${String(i + 1).padStart(4, "0")}.png`));
       }
     }
+    const extras: NonNullable<RenderOutput["expected"]["extras"]> = [];
+    if (cover) {
+      const c = coverHtml(cover, layout, files, spec.background);
+      await toPdf(c.html, "cover.pdf", c.widthMm, c.heightMm);
+      extras.push({ label: "cover.pdf", file: join(outDir, "cover.pdf"), count: 2, widthMm: c.widthMm, heightMm: c.heightMm });
+      const sp = spineHtml(spec, layout);
+      if (sp) {
+        await toPdf(sp.html, "spine.pdf", sp.widthMm, sp.heightMm);
+        extras.push({ label: "spine.pdf", file: join(outDir, "spine.pdf"), count: 1, widthMm: sp.widthMm, heightMm: sp.heightMm });
+      }
+      // Some labs (Prodigi) want one PDF: front cover, the interior, back cover.
+      if (p.cover === "in-book" && kind === "pdf" && p.export === "pdf-pages") {
+        const book = await PDFDocument.create();
+        const [cv, inner] = await Promise.all([PDFDocument.load(readFileSync(join(outDir, "cover.pdf"))), PDFDocument.load(readFileSync(printPath))]);
+        const [front, back] = await book.copyPages(cv, [0, 1]);
+        book.addPage(front!);
+        for (const pg of await book.copyPages(inner, inner.getPageIndices())) book.addPage(pg);
+        book.addPage(back!);
+        writeFileSync(join(outDir, "book.pdf"), await book.save());
+        extras.push({ label: "book.pdf", file: join(outDir, "book.pdf"), count: pr.sheets + 2, widthMm: pr.widthMm, heightMm: pr.heightMm });
+      }
+    }
     return {
       print: printPath,
       proof: join(outDir, "proof.pdf"),
       expected: {
         print: { kind, count: pr.sheets, widthMm: pr.widthMm, heightMm: pr.heightMm, dpi: p.dpi },
         proof: proofOut,
+        extras,
       },
     };
   } finally {

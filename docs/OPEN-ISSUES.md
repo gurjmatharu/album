@@ -28,8 +28,14 @@ them. Close an issue by deleting it here in the commit that fixes it.
    bleed, 10 mm safe margin; there is no 12x12 in layflat). Still true: Page range (18 or 24 minimum), bleed, safe
    margins and the interior file shape need the API reference and one test order.
 
-5. **No cover and no spine.** Only interior spreads are designed and rendered. Both labs
-   need cover art, and Prodigi wants a separate spine whose width depends on page count.
+5. **Cover and spine are built; the lab's cover rules are not confirmed.** `spec.cover` lays
+   out back and front as a flat wraparound (`cover-inset`, `cover-full`) and renders
+   `cover.pdf`, `spine.pdf` and, for Prodigi, `book.pdf` (front cover, interior, back cover,
+   per its print guide). Unknown until a sandbox order: whether Prodigi takes the cover inside
+   the main PDF or as a separate `cover` print area; the wrap margin a printed hardcover needs
+   (covers use the profile's bleed, 0 mm for Prodigi, and keep type 30 mm in); whether the
+   18-122 page range counts the covers; the spine width for this page count (the album marks
+   it `estimated` and the build warns).
 
 6. **HEIC and RAW files are skipped.** Ingest reports how many. iPhone photos (HEIC) and
    any photographer's RAW delivery need a decode step (libheif, libraw) before ingest.

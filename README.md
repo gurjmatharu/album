@@ -57,6 +57,9 @@ written and lists what failed. `bun test` runs the unit tests and one end-to-end
 | `out/proof.pdf` | `build` | summary and lint list, then every spread with guides |
 | `out/print.pdf` or `out/spreads/*.jpg` | `build` | what the lab gets, per the print profile |
 | `out/lint.json`, `out/preflight.json` | `build` | the checks, as data |
+| `out/cover.pdf`, `out/spine.pdf` | `build` | front and back cover (from `spec.cover`), and the spine at the width the spec gives |
+| `out/book.pdf` | `build` | for labs that want one file (Prodigi): front cover, the interior, back cover |
+| `out/review/` | `pack` | the reviewer's evidence: flatplan, each spread, neighbouring pairs, `review.md` with the rubric |
 | `out/viewer/` | `view` | the page-turning viewer: `index.html`, trimmed pages, cover image |
 | `log.jsonl` | every stage | one line per stage: wall time, dollars |
 

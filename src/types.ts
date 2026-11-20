@@ -52,6 +52,36 @@ export const PeopleFileSchema = z.object({
 });
 export type PeopleFile = z.infer<typeof PeopleFileSchema>;
 
+export const SlotSpecSchema = z.object({
+  slot: z.string(),
+  photo: z.string(),
+  /** Optional point of interest, fractions of the photo. Overrides the face centre. */
+  focus: z.object({ x: z.number(), y: z.number() }).optional(),
+  /** Pull a detail: crop this many times tighter around `focus` (1 = the whole fitted frame). The resolution lint guards it. */
+  zoom: z.number().min(1).max(4).optional(),
+});
+
+/**
+ * The cover, laid out flat like a wraparound without its spine: the back cover is the left
+ * page, the front cover the right. Uses a `cover-*` template. The spine is its own file.
+ */
+export const CoverSchema = z.object({
+  template: z.string(),
+  slots: z.array(SlotSpecSchema),
+  text: z.record(z.string(), z.string()).optional(),
+  background: z.string().optional(),
+  spine: z
+    .object({
+      /** From the lab for this page count (Prodigi: GET /catalogue/variants/{sku}/spine). */
+      widthMm: z.number().positive(),
+      /** True until the width came from the lab; the build warns. */
+      estimated: z.boolean().optional(),
+      text: z.string().optional(),
+      background: z.string().optional(),
+    })
+    .optional(),
+});
+
 export const SpecSchema = z.object({
   version: z.literal(1),
   title: z.string(),
@@ -67,6 +97,7 @@ export const SpecSchema = z.object({
       notes: z.string().optional(),
     })
     .optional(),
+  cover: CoverSchema.optional(),
   /** Print prep (src/prep.ts): "auto" when absent; "off" prints the pictures exactly as delivered. */
   prep: z.enum(["auto", "off"]).optional(),
   people: z.array(z.object({ id: z.string(), name: z.string(), minAppearances: z.number().int().min(0) })),
@@ -83,16 +114,7 @@ export const SpecSchema = z.object({
       background: z.string().optional(),
       /** Words for the template's text boxes, by box id (a title, a date, a short caption). */
       text: z.record(z.string(), z.string()).optional(),
-      slots: z.array(
-        z.object({
-          slot: z.string(),
-          photo: z.string(),
-          /** Optional point of interest, fractions of the photo. Overrides the face centre. */
-          focus: z.object({ x: z.number(), y: z.number() }).optional(),
-          /** Pull a detail: crop this many times tighter around `focus` (1 = the whole fitted frame). The resolution lint guards it. */
-          zoom: z.number().min(1).max(4).optional(),
-        }),
-      ),
+      slots: z.array(SlotSpecSchema),
     }),
   ),
 });
@@ -115,6 +137,8 @@ export const ProfileSchema = z.object({
   minDpi: z.number().positive(),
   pages: z.object({ min: z.number().int(), max: z.number().int(), multiple: z.number().int().positive() }),
   export: z.enum(["pdf-pages", "pdf-spreads", "jpg-spreads"]),
+  /** "in-book": the lab wants the front cover as page 1 and the back cover last in one PDF (book.pdf). Else cover.pdf on its own. */
+  cover: z.enum(["in-book", "separate"]).optional(),
   /** False until the numbers were checked against the lab's own spec. */
   verified: z.boolean(),
   notes: z.string(),

@@ -75,6 +75,7 @@ export async function preflight(out: RenderOutput): Promise<Check[]> {
   const e = out.expected;
   checks.push(...(await pdfChecks("proof.pdf", out.proof, e.proof.count, e.proof.widthMm, e.proof.heightMm)));
   if (!e.print || !out.print) return checks;
+  for (const x of e.extras ?? []) checks.push(...(await pdfChecks(x.label, x.file, x.count, x.widthMm, x.heightMm)));
   if (e.print.kind === "pdf") {
     checks.push(...(await pdfChecks("print.pdf", out.print, e.print.count, e.print.widthMm, e.print.heightMm)));
     checks.push(await looksLikeSheets(out.print));

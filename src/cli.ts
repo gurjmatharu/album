@@ -5,8 +5,8 @@ import { cull, type Select } from "./cull";
 import { directClaude } from "./director/claude";
 import { directHeuristic, type DirectOptions } from "./director/heuristic";
 import { ingest } from "./ingest";
-import { resolveLayout } from "./layout";
-import { lint, summarize } from "./lints";
+import { resolveCover, resolveLayout } from "./layout";
+import { lint, lintCover, summarize } from "./lints";
 import { preflight } from "./preflight";
 import { readSourceDir, render } from "./render";
 import { THEMES } from "./themes";
@@ -122,8 +122,10 @@ async function main(): Promise<number> {
   const doBuild = async (renderToo: boolean) => {
     const spec = loadSpec(work);
     const photos = loadPhotos(work);
-    const layout = resolveLayout(spec, new Map(photos.map((x) => [x.id, x])), loadProfile(spec.profile));
-    const issues = lint(spec, layout);
+    const byId = new Map(photos.map((x) => [x.id, x]));
+    const layout = resolveLayout(spec, byId, loadProfile(spec.profile));
+    const coverLayout = resolveCover(spec, byId, loadProfile(spec.profile));
+    const issues = [...lint(spec, layout), ...lintCover(spec, coverLayout)];
     writeJson(`${p.out}/lint.json`, issues);
     printIssues(issues);
     const errors = summarize(issues).errors;
@@ -132,7 +134,7 @@ async function main(): Promise<number> {
       return errors ? 1 : 0;
     }
     const withPrint = errors === 0 || flags.force === "1";
-    const out = await render(spec, layout, issues, readSourceDir(p.source), p.assets, p.out, withPrint);
+    const out = await render(spec, layout, issues, readSourceDir(p.source), p.assets, p.out, withPrint, coverLayout);
     const checks = await preflight(out);
     writeJson(`${p.out}/preflight.json`, checks);
     for (const c of checks) console.log(`  ${c.ok ? "ok  " : "FAIL"} ${c.name}: ${c.detail}`);

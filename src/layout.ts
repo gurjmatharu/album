@@ -203,3 +203,10 @@ export function resolveLayout(spec: AlbumSpec, photos: Map<string, Photo>, profi
   }
   return { profile, spreadMm: { w: profile.pageMm.w * 2, h: profile.pageMm.h }, spreads, issues };
 }
+
+/** The cover laid out like a spread (left page = back cover, right page = front cover). */
+export function resolveCover(spec: AlbumSpec, photos: Map<string, Photo>, profile: Profile): Layout | undefined {
+  const c = spec.cover;
+  if (!c) return undefined;
+  return resolveLayout({ ...spec, spreads: [{ id: "cover", chapter: "cover", template: c.template, slots: c.slots, text: c.text, background: c.background }] }, photos, profile);
+}

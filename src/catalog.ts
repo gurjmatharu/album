@@ -34,6 +34,8 @@ export interface Template {
   place?: "first" | "last";
   /** Frames of one moment shown as a run; near-duplicates are allowed within the spread. */
   sequence?: boolean;
+  /** A cover layout (left page = back cover, right page = front cover); never an interior spread. */
+  cover?: boolean;
 }
 
 const M = 0.07; // page margin, fraction of a page
@@ -291,6 +293,35 @@ export const EDITORIAL: Template[] = [
 ];
 
 CATALOG.push(...EDITORIAL);
+
+/*
+ * Covers. Laid out as a flat wraparound without the spine: left page = back cover, right page
+ * = front cover. Type stays well inside the edges, because a printed hardcover wraps round its
+ * boards and the lab's wrap margin is not confirmed yet.
+ */
+export const COVERS: Template[] = [
+  {
+    id: "cover-inset",
+    cover: true,
+    description: "Front: one landscape set high in white, the title in Didot below it, a subtitle and a date line. Back: one quiet line. Gallery-catalogue restraint.",
+    slots: [land("a", "R", 0.12, 0.12, 0.76, { hero: true })],
+    text: [
+      words("title", "R", 0.12, 0.12 + 0.76 * L169 + 0.05, 0.76, 0.16, "display"),
+      words("subtitle", "R", 0.12, 0.12 + 0.76 * L169 + 0.19, 0.76, 0.07, "subtitle"),
+      words("kicker", "R", 0.12, 0.84, 0.76, 0.05, "kicker"),
+      words("line", "L", 0.2, 0.8, 0.6, 0.07, "caption", "center"),
+    ],
+  },
+  {
+    id: "cover-full",
+    cover: true,
+    description: "Front: one picture full bleed (square crop: set focus), no type; the title is on the spine and the back. Back: title and line centred. For a picture strong enough to be the whole cover.",
+    slots: [fullPage("a", "R")],
+    text: [words("title", "L", 0.15, 0.38, 0.7, 0.16, "display", "center", "bottom"), words("line", "L", 0.15, 0.56, 0.7, 0.07, "subtitle", "center")],
+  },
+];
+
+CATALOG.push(...COVERS);
 
 export function templateById(id: string): Template | undefined {
   return CATALOG.find((t) => t.id === id);

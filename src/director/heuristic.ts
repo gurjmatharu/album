@@ -134,7 +134,7 @@ export function directHeuristic(photos: Photo[], scores: Map<string, number>, op
       for (const t of CATALOG) {
         if (!theme.templates.includes(t.id) || t.slots.length > group.length) continue;
         if ((t.place === "first" && !first) || (t.place === "last" && !last)) continue;
-        if (t.sequence) continue; // a run of one moment is a director's choice, not a shape fit
+        if (t.sequence || t.cover) continue; // a run of one moment is a director's choice, not a shape fit
         const f = fill(t, group, score, opts.profile);
         if (f.slots.length < t.slots.length) continue;
         if (recent[recent.length - 1] === t.id) f.cost += 1.5;

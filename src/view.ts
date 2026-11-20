@@ -95,6 +95,18 @@ export async function buildViewer(spec: AlbumSpec, profile: Profile, photos: Pho
   const hero = used[0];
   if (hero) await sharp(join(sourceDir, hero.path)).rotate().resize({ width: 2400, height: 1600, fit: "cover", position: "attention" }).jpeg({ quality: 82, progressive: true, mozjpeg: true }).toFile(join(dir, "cover.jpg"));
 
+  // The real front cover, when the build wrote one: the viewer opens on it like a closed book.
+  let front: string | null = null;
+  const coverPdf = join(outDir, "cover.pdf");
+  if (existsSync(coverPdf)) {
+    const run = Bun.spawnSync(["pdftoppm", "-png", "-f", "1", "-l", "1", "-singlefile", "-scale-to", String(PAGE_PX), coverPdf, join(dir, "front-raw")]);
+    if (run.exitCode === 0) {
+      await sharp(join(dir, "front-raw.png")).jpeg({ quality: 86, progressive: true, mozjpeg: true }).toFile(join(dir, "front.jpg"));
+      rmSync(join(dir, "front-raw.png"), { force: true });
+      front = "front.jpg";
+    }
+  }
+
   const data = {
     /** Changes every build, so a browser never shows last build's pages under the same names. */
     build: Date.now().toString(36),
@@ -103,6 +115,7 @@ export async function buildViewer(spec: AlbumSpec, profile: Profile, photos: Pho
     photos: new Set(used.map((p) => p.id)).size,
     paper: spec.background,
     cover: hero ? "cover.jpg" : null,
+    front,
     spreads: spec.spreads.map((s, i) => ({ chapter: s.chapter, left: names[2 * i]!, right: names[2 * i + 1]! })),
   };
   const index = join(dir, "index.html");
@@ -117,6 +130,7 @@ interface ViewerData {
   photos: number;
   paper: string;
   cover: string | null;
+  front: string | null;
   spreads: { chapter: string; left: string; right: string }[];
 }
 
@@ -221,6 +235,13 @@ body.single .thumb img+img{display:none}
 .open:hover{transform:translateY(-1px);box-shadow:0 14px 34px -10px rgba(0,0,0,.7)}
 .open svg{width:16px;height:16px}
 .hint{margin-top:18px;font-size:12px;color:rgba(244,238,230,.55)}
+.front{display:none;width:min(62vh,78vw);aspect-ratio:1;object-fit:cover;margin:0 auto 34px;border-radius:2px;
+  box-shadow:0 2px 4px rgba(0,0,0,.3),0 30px 60px -18px rgba(0,0,0,.7),inset 0 0 0 1px rgba(0,0,0,.05);transform:perspective(1600px) rotateY(-6deg);transition:transform .6s var(--ease)}
+.front:hover{transform:perspective(1600px) rotateY(0)}
+.intro.has-front .front{display:block}
+.intro.has-front .kicker,.intro.has-front h1{display:none}
+.intro.has-front .ph{filter:blur(24px) saturate(1.1);opacity:.55}
+.intro.has-front .open{margin-top:22px}
 .intro.gone{opacity:0;transform:scale(1.03);transition:opacity .7s var(--ease),transform .9s var(--ease);pointer-events:none}
 kbd{font-family:var(--sans);font-size:11px;border:1px solid rgba(244,238,230,.3);border-radius:4px;padding:1px 5px}
 
@@ -252,6 +273,7 @@ kbd{font-family:var(--sans);font-size:11px;border:1px solid rgba(244,238,230,.3)
 <section class="intro" id="intro" aria-label="Cover">
   <div class="ph" id="ph"></div>
   <div class="in">
+    <img class="front" id="front" alt="Front cover">
     <div class="kicker">A photo album</div>
     <h1>${t}</h1>
     <div class="meta">${esc(d.dates)}${d.dates ? " · " : ""}${d.photos} photographs · ${d.spreads.length} spreads</div>
@@ -272,6 +294,7 @@ let pg = 0;          // index of the page in view; in spread mode always even (t
 let busy = false;
 let aim = 0;         // where the turn in progress is going
 
+if (D.front) { $("front").src = D.front + "?v=" + D.build; $("intro").classList.add("has-front"); }
 if (D.cover) $("ph").style.backgroundImage = "url(" + D.cover + "?v=" + D.build + ")";
 
 function fit() {

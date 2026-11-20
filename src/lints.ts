@@ -62,6 +62,8 @@ export function lint(spec: AlbumSpec, layout: Layout): Issue[] {
       if (r.x < W / 2 + g && r.x + r.w > W / 2 - g) err("text-on-fold", `spread ${sp.id}: text box ${t.def.id} crosses the fold band (${g} mm either side)`, { spread: sp.id });
     }
 
+    if (sp.template.cover) err("cover-in-interior", `spread ${sp.id}: ${sp.template.id} is a cover layout`, { spread: sp.id });
+
     if (theme && !theme.templates.includes(sp.template.id)) {
       err("off-theme", `spread ${sp.id}: template ${sp.template.id} is not part of the ${theme.id} theme`, { spread: sp.id });
     }
@@ -144,4 +146,30 @@ export function summarize(issues: Issue[]): { errors: number; warnings: number }
     errors: issues.filter((i) => i.severity === "error").length,
     warnings: issues.filter((i) => i.severity === "warning").length,
   };
+}
+
+/** Rules that make no sense for a cover on its own. */
+const NOT_FOR_COVER = new Set(["page-count", "profile-unverified", "chronology", "pacing", "off-theme", "unknown-theme", "coverage", "cover-in-interior"]);
+
+/**
+ * The cover's checks: the same picture and type rules as a spread (resolution, faces, type in
+ * the safe area), plus whether it is a cover layout and whether the spine width is real.
+ */
+export function lintCover(spec: AlbumSpec, cover: Layout | undefined): Issue[] {
+  const out: Issue[] = [];
+  const p = cover?.profile;
+  if (!spec.cover || !cover) {
+    return [];
+  }
+  const sp = cover.spreads[0];
+  if (sp && !sp.template.cover) out.push({ severity: "error", rule: "not-a-cover", spread: "cover", message: `cover: ${sp.template.id} is not a cover layout (use a cover-* template)` });
+  const sub = { ...spec, spreads: [{ id: "cover", chapter: "cover", template: spec.cover.template, slots: spec.cover.slots, text: spec.cover.text }] };
+  out.push(...lint(sub, cover).filter((i) => !NOT_FOR_COVER.has(i.rule)).map((i) => ({ ...i, message: i.message.replace(/^spread cover/, "cover") })));
+  const spine = spec.cover.spine;
+  if (!spine) {
+    if (p?.cover === "in-book") out.push({ severity: "warning", rule: "no-spine", spread: "cover", message: `cover: no spine; ${p.vendor} wants one, its width set by the page count` });
+  } else if (spine.estimated) {
+    out.push({ severity: "warning", rule: "spine-estimated", spread: "cover", message: `cover: spine width ${spine.widthMm} mm is an estimate; take it from the lab for ${spec.spreads.length * 2} pages before ordering` });
+  }
+  return out;
 }

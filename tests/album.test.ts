@@ -13,6 +13,8 @@ import { preflight } from "../src/preflight";
 import { render } from "../src/render";
 import type { AlbumSpec, Photo, Profile } from "../src/types";
 import { buildViewer, dateRange } from "../src/view";
+import { curve, luts, MAX_GAIN, MAX_SHADOW, planPrep, type PrepStats } from "../src/prep";
+import { parseVerdict } from "../src/review";
 import { loadPeople, loadPhotos, loadProfile, paths } from "../src/work";
 
 const profile: Profile = loadProfile("proof-10x10");
@@ -202,6 +204,68 @@ describe("cull and director", () => {
     expect(chapters(ps, 30, 10).map((c) => c.length)).toEqual([3, 2, 1]);
     expect(chapters(ps, 30, 2).map((c) => c.length)).toEqual([5, 1]);
     expect(allocate([40, 10, 10], 6).reduce((a, b) => a + b, 0)).toBe(6);
+  });
+});
+
+describe("creative direction", () => {
+  test("zoom pulls a tighter crop around the focus, and the resolution lint still guards it", () => {
+    const def = CATALOG.find((t) => t.id === "ed-stack-right")!.slots[1]!;
+    const p = photo("a", { width: 6000, height: 3375 });
+    const whole = solveCrop(p, def, profile);
+    const detail = solveCrop(p, def, profile, { x: 0.7, y: 0.3 }, 2);
+    expect(detail.crop.w).toBeCloseTo(whole.crop.w / 2, 3);
+    expect(detail.crop.x + detail.crop.w / 2).toBeCloseTo(0.7 * 6000, 0);
+    expect(detail.effDpi).toBeCloseTo(whole.effDpi / 2, 3);
+    const s = spec([{ id: "s01", chapter: "c", template: "ed-stack-right", slots: [{ slot: "a", photo: "a" }, { slot: "b", photo: "b", zoom: 4 }, { slot: "c", photo: "c" }] }]);
+    const small = [photo("a", { dhash: "ffff000000000000" }), photo("b", { width: 1500, height: 844, dhash: "00ff00ff00ff00ff" }), photo("c", { dhash: "0f0f0f0f0f0f0f0f" })];
+    const ed = { ...s, theme: "editorial" };
+    expect(lint(ed, resolveLayout(ed, new Map(small.map((x) => [x.id, x])), profile)).map((i) => i.rule)).toContain("resolution");
+  });
+
+  test("frames of one moment pass inside a sequence spread and fail anywhere else", () => {
+    const frames = ["a", "b", "c", "d"].map((id, i) => photo(id, { takenAt: `2026-06-20T15:00:0${i}.000Z` }));
+    const strip = { ...spec([{ id: "s01", chapter: "c", template: "ed-filmstrip", slots: ["a", "b", "c", "d"].map((x) => ({ slot: x, photo: x })) }]), theme: "editorial" };
+    const byId = new Map(frames.map((x) => [x.id, x]));
+    expect(lint(strip, resolveLayout(strip, byId, profile)).map((i) => i.rule)).not.toContain("near-duplicate");
+    const grid = { ...spec([{ id: "s01", chapter: "c", template: "ed-columns", slots: ["a", "b", "c", "d"].map((x) => ({ slot: x, photo: x })) }]), theme: "editorial" };
+    expect(lint(grid, resolveLayout(grid, byId, profile)).map((i) => i.rule)).toContain("near-duplicate");
+  });
+
+  test("a reviewer's PASS that the scores do not support is a FAIL", () => {
+    const answer = (print: number, v = "PASS") => `SCORES\nconcept: 8\nedit: 8\nsequence: 8\npairing: 8\nscale: 8\nrhythm: 8\nflow: 8\ncolour: 8\ntype: 8\nprint: ${print}\nVERDICT: ${v}`;
+    expect(parseVerdict(answer(9)).pass).toBe(true);
+    expect(parseVerdict(answer(7)).pass).toBe(false);
+    expect(parseVerdict(answer(9, "FAIL")).pass).toBe(false);
+    expect(parseVerdict("VERDICT: PASS").pass).toBe(false);
+  });
+});
+
+describe("print prep", () => {
+  const even: PrepStats = { mean: [0.5, 0.5, 0.5], p05: 0.1, p25: 0.35, p50: 0.5, p95: 0.85 };
+  const backlit: PrepStats = { mean: [0.45, 0.42, 0.4], p05: 0.03, p25: 0.12, p50: 0.35, p95: 0.97 };
+
+  test("the curve keeps black and white, never reverses tones, and lifts the middle a little", () => {
+    const p = planPrep(backlit, backlit.mean);
+    expect(curve(0, p)).toBe(0);
+    expect(curve(1, p)).toBe(1);
+    for (const t of luts(p)) for (let v = 1; v < 256; v++) expect(t[v]!).toBeGreaterThanOrEqual(t[v - 1]!);
+    expect(curve(0.5, planPrep(even, even.mean))).toBeGreaterThan(0.5);
+  });
+
+  test("a backlit picture gets its shadows lifted; a well-exposed one does not", () => {
+    expect(planPrep(backlit, backlit.mean).shadow).toBeGreaterThan(0.1);
+    expect(planPrep(backlit, backlit.mean).shadow).toBeLessThanOrEqual(MAX_SHADOW);
+    expect(planPrep(even, even.mean).shadow).toBe(0);
+  });
+
+  test("white balance moves toward the spread and stays within its bound", () => {
+    const blue: PrepStats = { ...even, mean: [0.4, 0.5, 0.7] };
+    const warm: [number, number, number] = [0.6, 0.5, 0.4];
+    const p = planPrep(blue, warm);
+    expect(p.gain[0]).toBeGreaterThan(1);
+    expect(p.gain[2]).toBeLessThan(1);
+    for (const g of p.gain) expect(Math.abs(g - 1)).toBeLessThanOrEqual(MAX_GAIN + 1e-9);
+    expect(planPrep(even, even.mean).gain).toEqual([1, 1, 1]);
   });
 });
 

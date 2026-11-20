@@ -37,7 +37,7 @@ export function dateRange(times: string[]): string {
 }
 
 /** Rasterize the print file into trimmed single pages, in reading order. */
-async function trimmedPages(printPath: string, profile: Profile, tmp: string): Promise<Buffer[]> {
+export async function trimmedPages(printPath: string, profile: Profile, tmp: string): Promise<Buffer[]> {
   const { w: pw, h: ph } = profile.pageMm;
   const b = profile.bleedMm;
   let sheets: string[];
@@ -96,6 +96,8 @@ export async function buildViewer(spec: AlbumSpec, profile: Profile, photos: Pho
   if (hero) await sharp(join(sourceDir, hero.path)).rotate().resize({ width: 2400, height: 1600, fit: "cover", position: "attention" }).jpeg({ quality: 82, progressive: true, mozjpeg: true }).toFile(join(dir, "cover.jpg"));
 
   const data = {
+    /** Changes every build, so a browser never shows last build's pages under the same names. */
+    build: Date.now().toString(36),
     title: spec.title,
     dates: dateRange(used.map((p) => p.takenAt)),
     photos: new Set(used.map((p) => p.id)).size,
@@ -109,6 +111,7 @@ export async function buildViewer(spec: AlbumSpec, profile: Profile, photos: Pho
 }
 
 interface ViewerData {
+  build: string;
   title: string;
   dates: string;
   photos: number;
@@ -260,7 +263,7 @@ kbd{font-family:var(--sans);font-size:11px;border:1px solid rgba(244,238,230,.3)
 <script>
 const D = ${json};
 const $ = (id) => document.getElementById(id);
-const src = (n) => "pages/p" + n + ".jpg";
+const src = (n) => "pages/p" + n + ".jpg?v=" + D.build;
 const pages = D.spreads.flatMap((s) => [s.left, s.right]);
 const reduce = matchMedia("(prefers-reduced-motion: reduce)");
 const portrait = matchMedia("(max-width: 700px) and (orientation: portrait)");
@@ -269,7 +272,7 @@ let pg = 0;          // index of the page in view; in spread mode always even (t
 let busy = false;
 let aim = 0;         // where the turn in progress is going
 
-if (D.cover) $("ph").style.backgroundImage = "url(" + D.cover + ")";
+if (D.cover) $("ph").style.backgroundImage = "url(" + D.cover + "?v=" + D.build + ")";
 
 function fit() {
   const s = $("stage").getBoundingClientRect();
@@ -367,7 +370,7 @@ D.spreads.forEach((s, i) => {
   b.className = "thumb" + (i > 0 && s.chapter !== D.spreads[i - 1].chapter ? " gap" : "");
   b.setAttribute("aria-label", "Spread " + (i + 1) + (s.chapter ? ", " + s.chapter : ""));
   b.title = "Spread " + (i + 1);
-  b.innerHTML = '<img loading="lazy" alt="" src="pages/t' + s.left + '.jpg"><img loading="lazy" alt="" src="pages/t' + s.right + '.jpg">';
+  b.innerHTML = '<img loading="lazy" alt="" src="pages/t' + s.left + '.jpg?v=' + D.build + '"><img loading="lazy" alt="" src="pages/t' + s.right + '.jpg?v=' + D.build + '">';
   b.onclick = () => go(i * 2);
   $("strip").appendChild(b);
 });

@@ -29,7 +29,7 @@ export const THEMES: Theme[] = [
     id: "editorial",
     description: "White pages and a modern book designer's layouts: offsets instead of grids, one large picture against a small one, pictures that keep their whole frame, type set for a title and a close. Reads like a photo book from a good publisher.",
     background: "#ffffff",
-    templates: ["pano", "full-pair", "ed-full-left", "ed-full-right", "ed-opener", "ed-wide", "ed-offset", "ed-offset-rise", "ed-bleed-detail", "ed-detail-bleed", "ed-stack-right", "ed-stack-left", "ed-columns", "ed-portrait", "ed-quiet", "ed-closer"],
+    templates: ["pano", "full-pair", "ed-full-left", "ed-full-right", "ed-full-stack", "ed-stack-full", "ed-full-contact", "ed-contact-full", "ed-filmstrip", "ed-opener", "ed-wide", "ed-offset", "ed-offset-rise", "ed-bleed-detail", "ed-detail-bleed", "ed-stack-right", "ed-stack-left", "ed-columns", "ed-portrait", "ed-quiet", "ed-closer"],
   },
   {
     id: "journal",

@@ -75,8 +75,12 @@ them. Close an issue by deleting it here in the commit that fixes it.
     (face size is a start) and scene understanding from the tagging pass (issue 9). Today
     only the model director's prompt carries them. See [DESIGN.md](DESIGN.md).
 
-22. **No grade matching.** The pipeline never alters a photo's colour. If the edit is
-    inconsistent across a spread the lint warns and nothing fixes it.
+22. **Print prep is automatic and bounded, not an edit.** `src/prep.ts` lifts shadows on
+    backlit pictures, pulls white balance 60% toward each spread's average (at most 6% a
+    channel), lifts midtones slightly for print and sharpens at output size. It does not
+    straighten horizons, correct wide-angle stretch, retouch, or match a creative grade; that
+    is a person's job in Lightroom. The amounts were tuned by eye on one album (Punta Cana
+    2022) and have not been checked against a printed proof.
 
 23. **Nothing measures gaze.** The `gaze-off-page` lint and the director's cost exist, but
     the face worker does not write `gaze`. InsightFace reports head pose; mapping its yaw to

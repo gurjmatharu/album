@@ -59,12 +59,28 @@ export const SpecSchema = z.object({
   /** The album's art direction: an id from src/themes.ts. */
   theme: z.string(),
   background: z.string(),
+  /** The creative brief: one idea the whole book serves, and how it unfolds. Directors write it first. */
+  brief: z
+    .object({
+      idea: z.string(),
+      arc: z.string().optional(),
+      notes: z.string().optional(),
+    })
+    .optional(),
+  /** Print prep (src/prep.ts): "auto" when absent; "off" prints the pictures exactly as delivered. */
+  prep: z.enum(["auto", "off"]).optional(),
   people: z.array(z.object({ id: z.string(), name: z.string(), minAppearances: z.number().int().min(0) })),
   spreads: z.array(
     z.object({
       id: z.string(),
       chapter: z.string(),
       template: z.string(),
+      /** The spread's job in the sequence; the reviewer judges it against this. */
+      role: z.enum(["opener", "statement", "portrait", "pairing", "detail", "sequence", "pause", "closer"]).optional(),
+      /** One line: what this spread should make the reader feel or notice. */
+      intent: z.string().optional(),
+      /** Page colour for this spread when it differs from the album's (a dark chapter, say). */
+      background: z.string().optional(),
       /** Words for the template's text boxes, by box id (a title, a date, a short caption). */
       text: z.record(z.string(), z.string()).optional(),
       slots: z.array(
@@ -73,6 +89,8 @@ export const SpecSchema = z.object({
           photo: z.string(),
           /** Optional point of interest, fractions of the photo. Overrides the face centre. */
           focus: z.object({ x: z.number(), y: z.number() }).optional(),
+          /** Pull a detail: crop this many times tighter around `focus` (1 = the whole fitted frame). The resolution lint guards it. */
+          zoom: z.number().min(1).max(4).optional(),
         }),
       ),
     }),

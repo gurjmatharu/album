@@ -5,6 +5,7 @@ import { pathToFileURL } from "node:url";
 import { chromium, type Browser } from "playwright";
 import sharp from "sharp";
 import type { Layout, PlacedSlot, PlacedSpread } from "./layout";
+import { applyPrep, describePrep, measure, planPrep, spreadMean, type Prep, type PrepStats } from "./prep";
 import type { AlbumSpec, Issue, Profile } from "./types";
 
 const mm = (n: number) => `${n.toFixed(3)}mm`;
@@ -15,7 +16,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&l
  * Never upscales. The file name is a hash of everything that decides its pixels, so a second
  * run reuses it.
  */
-async function asset(slot: PlacedSlot, profile: Profile, sourceDir: string, cacheDir: string): Promise<string> {
+async function asset(slot: PlacedSlot, profile: Profile, sourceDir: string, cacheDir: string, prep?: Prep): Promise<string> {
   const crop = {
     left: Math.max(0, Math.round(slot.crop.x)),
     top: Math.max(0, Math.round(slot.crop.y)),
@@ -25,17 +26,13 @@ async function asset(slot: PlacedSlot, profile: Profile, sourceDir: string, cach
   crop.width = Math.min(crop.width, slot.photo.width - crop.left);
   crop.height = Math.min(crop.height, slot.photo.height - crop.top);
   const target = Math.min(crop.width, Math.round((slot.rect.w / 25.4) * profile.dpi));
-  const key = createHash("sha256").update(JSON.stringify([slot.photo.sha, crop, target, 1])).digest("hex").slice(0, 20);
+  const key = createHash("sha256").update(JSON.stringify([slot.photo.sha, crop, target, 1, prep ?? null])).digest("hex").slice(0, 20);
   const file = join(cacheDir, `${key}.jpg`);
   if (!existsSync(file)) {
     mkdirSync(cacheDir, { recursive: true });
-    await sharp(join(sourceDir, slot.photo.path))
-      .rotate()
-      .extract(crop)
-      .resize({ width: target })
-      .toColourspace("srgb")
-      .jpeg({ quality: 95, chromaSubsampling: "4:4:4" })
-      .toFile(file);
+    let img = sharp(join(sourceDir, slot.photo.path)).rotate().extract(crop).resize({ width: target }).toColourspace("srgb");
+    if (prep) img = await applyPrep(img, prep);
+    await img.jpeg({ quality: 95, chromaSubsampling: "4:4:4" }).toFile(file);
   }
   return file;
 }
@@ -112,14 +109,15 @@ function printHtml(layout: Layout, files: Map<PlacedSlot, string>, bg: string): 
   for (const sp of layout.spreads) {
     const offsets = byPage ? [0, -p.pageMm.w] : [0];
     for (const off of offsets) {
-      sheets.push(`<div class="sheet" style="width:${mm(w)};height:${mm(h)};background:${bg}">${spreadHtml(sp, files, layout, false, bg).replace('class="spread" style="', `class="spread" style="left:${mm(off)};`)}</div>`);
+      const paper = sp.background ?? bg;
+      sheets.push(`<div class="sheet" style="width:${mm(w)};height:${mm(h)};background:${paper}">${spreadHtml(sp, files, layout, false, paper).replace('class="spread" style="', `class="spread" style="left:${mm(off)};`)}</div>`);
     }
   }
   return { html: doc(`@page{size:${mm(w)} ${mm(h)};margin:0}`, sheets.join("")), widthMm: w, heightMm: h, sheets: sheets.length };
 }
 
 /** The file a person reads: a summary page, then every spread with trim, safe zone, fold and faces drawn on. */
-function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, string>, issues: Issue[]): { html: string; widthMm: number; heightMm: number; sheets: number } {
+function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, string>, issues: Issue[], preps: Map<PlacedSlot, Prep>): { html: string; widthMm: number; heightMm: number; sheets: number } {
   const p = layout.profile;
   const b = p.bleedMm;
   const pad = 12;
@@ -132,17 +130,17 @@ function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, strin
   const photos = layout.spreads.reduce((n, s) => n + s.slots.length, 0);
   const cover = `<div class="sheet text" style="width:${mm(w)};height:${mm(h)}">
 <h1>${esc(spec.title)}</h1>
-<p>${layout.spreads.length} spreads, ${layout.spreads.length * 2} pages, ${photos} photos. Profile <b>${esc(p.id)}</b>: page ${p.pageMm.w} x ${p.pageMm.h} mm, bleed ${p.bleedMm} mm, ${p.dpi} dpi, export ${p.export}${p.verified ? "" : " (not verified against the lab)"}.</p>
+<p>${layout.spreads.length} spreads, ${layout.spreads.length * 2} pages, ${photos} photos. Profile <b>${esc(p.id)}</b>: page ${p.pageMm.w} x ${p.pageMm.h} mm, bleed ${p.bleedMm} mm, ${p.dpi} dpi, export ${p.export}${p.verified ? "" : " (not verified against the lab)"}. Print prep: ${spec.prep === "off" ? "off, pictures as delivered" : "auto (shadow lift, spread white balance, print midtone lift, output sharpening; originals untouched)"}.</p>
 <p class="${errors.length ? "error" : "ok"}">${errors.length ? `${errors.length} errors: this album is not ready to print.` : "No lint errors."} ${warnings.length} warnings.</p>
 <p>Red line: trim. Green dashes: safe zone. Blue band: fold. Green boxes: faces; red boxes: faces cut or on the fold.</p>
 <ul>${[...errors, ...warnings].slice(0, 60).map(li).join("")}</ul></div>`;
   const sheets = layout.spreads.map((sp) => {
     const mine = issues.filter((i) => i.spread === sp.id);
     const rows = sp.slots
-      .map((s) => `${s.def.id}: ${esc(s.photo.path)} ${Math.round(s.effDpi)} dpi${s.faces.filter((f) => f.person).length ? " [" + s.faces.map((f) => f.person).filter(Boolean).join(", ") + "]" : ""}`)
+      .map((s) => `${s.def.id}: ${esc(s.photo.path)} ${Math.round(s.effDpi)} dpi${s.faces.filter((f) => f.person).length ? " [" + s.faces.map((f) => f.person).filter(Boolean).join(", ") + "]" : ""}${preps.get(s) ? ` (${esc(describePrep(preps.get(s)!))})` : ""}`)
       .join(" &nbsp;|&nbsp; ");
     return `<div class="sheet" style="width:${mm(w)};height:${mm(h)}">
-<div style="position:absolute;left:${mm(pad)};top:${mm(pad)};width:${mm(layout.spreadMm.w + 2 * b)};height:${mm(layout.spreadMm.h + 2 * b)};background:${spec.background};outline:0.2mm solid #999">${spreadHtml(sp, files, layout, true, spec.background)}</div>
+<div style="position:absolute;left:${mm(pad)};top:${mm(pad)};width:${mm(layout.spreadMm.w + 2 * b)};height:${mm(layout.spreadMm.h + 2 * b)};background:${sp.background ?? spec.background};outline:0.2mm solid #999">${spreadHtml(sp, files, layout, true, sp.background ?? spec.background)}</div>
 <div class="foot" style="left:${mm(pad)};top:${mm(pad + layout.spreadMm.h + 2 * b + 3)};width:${mm(w - 2 * pad)}"><b>${esc(sp.id)}</b> ${esc(sp.chapter)} · ${esc(sp.template.id)}<br>${rows}${mine.length ? `<ul>${mine.map(li).join("")}</ul>` : ""}</div></div>`;
   });
   const css = `@page{size:${mm(w)} ${mm(h)};margin:0}
@@ -177,7 +175,17 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
   const p = layout.profile;
   mkdirSync(outDir, { recursive: true });
   const files = new Map<PlacedSlot, string>();
-  for (const sp of layout.spreads) for (const s of sp.slots) files.set(s, await asset(s, p, sourceDir, cacheDir));
+  // Print prep (prep.ts): measure every picture, balance each spread toward its own colour of light.
+  const preps = new Map<PlacedSlot, Prep>();
+  if (spec.prep !== "off") {
+    const stats = new Map<string, PrepStats>();
+    for (const sp of layout.spreads) for (const s of sp.slots) if (!stats.has(s.photo.id)) stats.set(s.photo.id, await measure(join(sourceDir, s.photo.path)));
+    for (const sp of layout.spreads) {
+      const target = spreadMean(sp.slots.map((s) => stats.get(s.photo.id)!));
+      for (const s of sp.slots) preps.set(s, planPrep(stats.get(s.photo.id)!, target));
+    }
+  }
+  for (const sp of layout.spreads) for (const s of sp.slots) files.set(s, await asset(s, p, sourceDir, cacheDir, preps.get(s)));
 
   const browser = await launch();
   try {
@@ -189,7 +197,7 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
       await page.pdf({ path: join(outDir, name), width: mm(w), height: mm(h), printBackground: true, preferCSSPageSize: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });
     };
 
-    const proof = proofHtml(spec, layout, files, issues);
+    const proof = proofHtml(spec, layout, files, issues, preps);
     await toPdf(proof.html, "proof.pdf", proof.widthMm, proof.heightMm);
 
     const checkDir = join(outDir, "check");

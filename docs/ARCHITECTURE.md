@@ -95,6 +95,16 @@ Model roles not built yet, in the order they are worth adding (issues 9 and 10):
 per-photo tagging pass (`claude-haiku-5-5` through the Batch API, or a local Qwen3-VL or
 Gemma 4) for moment, expression and eyes; then a read-only reviewer on rendered spreads.
 
+## Print prep
+
+`src/prep.ts`, applied in render as each slot's picture is cut, unless the spec says
+`"prep": "off"`. It measures every picture on a 512 px preview (channel means, luminance
+percentiles), then per picture: a shadow lift scaled by how dark its quarter-tones are and how
+bright its highlights (a backlit face), white balance pulled toward its spread's average, a
+small midtone lift because paper reads darker than a screen, and output sharpening at the
+printed size. All bounded; the original is never touched; the proof lists what was done to
+each slot. The asset cache key includes the edit, so changing it re-cuts only what changed.
+
 ## Render and preflight
 
 Render cuts every slot's picture to its printed size at the profile's resolution (never

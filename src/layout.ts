@@ -23,6 +23,8 @@ export interface PlacedSlot {
   effDpi: number;
   /** Share of the photo's area that survives the crop. */
   kept: number;
+  /** Set when the director pulled a detail on purpose (spec slot `zoom`). */
+  zoom?: number;
   faces: PlacedFace[];
 }
 
@@ -39,6 +41,8 @@ export interface PlacedSpread {
   template: Template;
   slots: PlacedSlot[];
   text: PlacedText[];
+  /** Page colour when the spread overrides the album's. */
+  background?: string;
 }
 
 export interface Layout {
@@ -110,12 +114,28 @@ export function solveCrop(
   def: SlotDef,
   profile: Profile,
   focus?: { x: number; y: number },
+  zoom = 1,
 ): Omit<PlacedSlot, "def" | "photo"> {
   const rect = slotRectMm(def, profile);
   const aspect = rect.w / rect.h;
   const wide = photo.width / photo.height > aspect;
   const cw = wide ? photo.height * aspect : photo.width;
   const ch = wide ? photo.height : photo.width / aspect;
+  if (zoom > 1) {
+    // A detail pulled from the frame: the crop shrinks by `zoom` and is centred on the point of
+    // interest. The resolution lint guards how far this can go at the printed size.
+    const zw = cw / zoom;
+    const zh = ch / zoom;
+    const at = focus ?? facesCentre(photo.faces) ?? { x: 0.5, y: 0.45 };
+    const crop: Rect = {
+      x: Math.min(Math.max(at.x * photo.width - zw / 2, 0), photo.width - zw),
+      y: Math.min(Math.max(at.y * photo.height - zh / 2, 0), photo.height - zh),
+      w: zw,
+      h: zh,
+    };
+    const faces = placeFaces(photo, crop, rect, profile);
+    return { rect, crop, faces, effDpi: crop.w / (rect.w / 25.4), kept: (crop.w * crop.h) / (photo.width * photo.height), zoom };
+  }
   const free = wide ? photo.width - cw : photo.height - ch;
   // With nothing to aim at, a vertical crop favours the upper part, where heads usually are.
   const want = focus ?? facesCentre(photo.faces) ?? { x: 0.5, y: wide ? 0.5 : 0.42 };
@@ -163,7 +183,7 @@ export function resolveLayout(spec: AlbumSpec, photos: Map<string, Photo>, profi
         issues.push({ severity: "error", rule: "unknown-photo", spread: sp.id, slot: def.id, photo: fill.photo, message: `spread ${sp.id} slot ${def.id}: photo ${fill.photo} is not in photos.json` });
         continue;
       }
-      slots.push({ def, photo, ...solveCrop(photo, def, profile, fill.focus) });
+      slots.push({ def, photo, ...solveCrop(photo, def, profile, fill.focus, fill.zoom) });
     }
     for (const s of sp.slots) {
       if (!template.slots.some((d) => d.id === s.slot)) {
@@ -179,7 +199,7 @@ export function resolveLayout(spec: AlbumSpec, photos: Map<string, Photo>, profi
       }
       if (value.trim()) text.push({ def, value, rect: { x: def.rect.x * profile.pageMm.w * 2, y: def.rect.y * profile.pageMm.h, w: def.rect.w * profile.pageMm.w * 2, h: def.rect.h * profile.pageMm.h } });
     }
-    spreads.push({ id: sp.id, chapter: sp.chapter, template, slots, text });
+    spreads.push({ id: sp.id, chapter: sp.chapter, template, slots, text, background: sp.background });
   }
   return { profile, spreadMm: { w: profile.pageMm.w * 2, h: profile.pageMm.h }, spreads, issues };
 }

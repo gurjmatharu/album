@@ -19,6 +19,11 @@ open work/out/proof.pdf                   # every spread with trim, safe zone, f
 bun run album view                        # page-turning viewer of the print file -> work/out/viewer/index.html
 ```
 
+Every picture gets a light, bounded print prep as it is cut for the print file (shadow lift
+on backlit faces, white balance matched within each spread, a midtone lift for paper,
+sharpening); originals are untouched and `"prep": "off"` in `album.json` turns it off. See
+`src/prep.ts`.
+
 The viewer is built from the print file itself, trimmed at the bleed, so what you flip
 through is what the lab gets. It needs a web server for its images (`python3 -m http.server
 --directory work/out/viewer`); `.claude/launch.json` has one for the Punta Cana work dir.

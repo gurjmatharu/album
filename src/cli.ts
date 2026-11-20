@@ -10,6 +10,7 @@ import { lint, summarize } from "./lints";
 import { preflight } from "./preflight";
 import { readSourceDir, render } from "./render";
 import { THEMES } from "./themes";
+import { buildPack } from "./review";
 import { buildViewer } from "./view";
 import type { AlbumSpec, Issue, Photo } from "./types";
 import { listProfiles, loadPeople, loadPhotos, loadProfile, loadSpec, logStage, paths, readJson, writeJson } from "./work";
@@ -24,6 +25,7 @@ const USAGE = `album <verb> [options]
   build                  lint, render proof.pdf and the print file, preflight them
   run <photo dir>        ingest, cull, direct, build
   view                   write out/viewer/index.html: a page-turning viewer of the print file
+  pack                   write out/review/: the reviewer's evidence pack and review.md (brief + rubric)
   profiles               list print profiles
   themes                 list themes
 
@@ -172,6 +174,16 @@ async function main(): Promise<number> {
       const v = await buildViewer(spec, loadProfile(spec.profile), loadPhotos(work), readSourceDir(p.source), p.out);
       console.log(`view: ${v.pages} pages -> ${v.index}`);
       done("view", { pages: v.pages });
+      return 0;
+    }
+    case "pack": {
+      const spec = loadSpec(work);
+      const photos = loadPhotos(work);
+      const profile = loadProfile(spec.profile);
+      const layout = resolveLayout(spec, new Map(photos.map((x) => [x.id, x])), profile);
+      const r = await buildPack(spec, profile, layout, lint(spec, layout), p.out);
+      console.log(`pack: evidence and brief -> ${r.brief}`);
+      done("pack", {});
       return 0;
     }
     case "profiles":

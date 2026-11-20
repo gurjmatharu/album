@@ -96,7 +96,8 @@ export function lint(spec: AlbumSpec, layout: Layout): Issue[] {
 
       for (const u of used) {
         if (u.photo.id === s.photo.id) err("duplicate", `${where}: same photo as spread ${u.spread} slot ${u.slot}`, at);
-        else if (nearDuplicate(u.photo, s.photo)) {
+        // Frames of one moment are the point of a sequence spread; anywhere else they are an error.
+        else if (nearDuplicate(u.photo, s.photo) && !(u.spread === sp.id && sp.template.sequence)) {
           err("near-duplicate", `${where}: near-duplicate of ${u.photo.path} in spread ${u.spread} (hash distance ${hamming(u.photo.dhash, s.photo.dhash)})`, at);
         }
       }
@@ -106,7 +107,7 @@ export function lint(spec: AlbumSpec, layout: Layout): Issue[] {
       if (s.effDpi < p.minDpi) err("resolution", `${where}: ${dpi} dpi at printed size, minimum ${p.minDpi}`, at);
       else if (s.effDpi < p.dpi * 0.8) warn("resolution", `${where}: ${dpi} dpi at printed size, target ${p.dpi}`, at);
 
-      if (s.kept < 0.5) warn("heavy-crop", `${where}: only ${Math.round(s.kept * 100)}% of the photo survives the crop`, at);
+      if (s.kept < 0.5 && !s.zoom) warn("heavy-crop", `${where}: only ${Math.round(s.kept * 100)}% of the photo survives the crop`, at);
 
       const seen = new Set<string>();
       for (const f of s.faces) {

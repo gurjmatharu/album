@@ -95,3 +95,35 @@ A `pano` slot is one photograph across both pages, rendered as one image and spl
 fold in the print file, so it is continuous by construction. The risk is what lands on the
 fold: the crop solver slides the crop to keep every face clear of a band around it
 (`gutterSafeMm` in the print profile) and the build fails if it cannot.
+
+
+## Creative direction and review
+
+Borrowed from the Muninn shorts pipeline (`pi-ai`, `docs/architecture/video-system-review-2026-09-25.md`):
+the director writes intent as data, code lays it out, and a read-only reviewer judges what
+was rendered.
+
+**The brief.** `album.json` carries `brief: {idea, arc, notes}`: the one idea the book serves,
+how it unfolds, its motifs. A director writes it before choosing a single picture.
+
+**Each spread** carries a `role` (`opener`, `statement`, `portrait`, `pairing`, `detail`,
+`sequence`, `pause`, `closer`) and a one-line `intent`, and may set its own page colour
+(`background`), for a chapter or the last light. Intent lives in the spec, never in a
+separate prose document, so the plan and the pages cannot disagree.
+
+**Tools a director has beyond templates:**
+- `zoom` on a slot pulls a detail from a frame (a flower, the light on water). The resolution
+  lint guards it: a 6000 px frame zooms about 2x in a half-page slot and still prints at
+  300 dpi; a full-bleed page or panorama cannot zoom at all.
+- Sequence templates (`ed-full-contact`, `ed-contact-full`, `ed-filmstrip`) show frames of one
+  moment as a run. Near-duplicates are allowed inside such a spread and nowhere else.
+- Story order may beat clock order; `chronology` stays a warning.
+
+**The review.** `album pack` writes `out/review/`: `flatplan.jpg` (the book at a glance),
+`spreads/` (each spread large), `pairs/` (neighbours, for rhythm and repetition) and
+`review.md` (brief, roles and intents, lint results, rubric, answer format). The reviewer
+scores ten items 0-10: concept, edit, sequence, pairing, scale, rhythm, flow, colour, type,
+print (`RUBRIC` in `src/review.ts`). PASS needs every item at least 6, a mean of at least 7.5
+and print at least 8; `parseVerdict` applies the thresholds in code, so a PASS the scores do
+not support is a FAIL. Each fix is an `album.json` edit by a fresh call that changes only the
+spreads named. At most two rounds.

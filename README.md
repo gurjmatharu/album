@@ -38,7 +38,7 @@ bun run album ingest ~/Pictures/wedding
 uv run --project cv python cv/cv_worker.py faces ~/Pictures/wedding work   # see cv/README.md
 # edit work/people.json: name the clusters, set each person's minimum appearances
 bun run album cull
-bun run album direct --profile prodigi-layflat-297 --theme gallery --spreads 30 --title "..." [--director claude]
+bun run album direct --profile prodigi-layflat-294 --theme gallery --spreads 30 --title "..." [--director claude]
 bun run album build
 ```
 

@@ -24,18 +24,22 @@ them. Close an issue by deleting it here in the commit that fixes it.
    questions are in [PRINT.md](PRINT.md): flush mount through the API, file format, and
    duties or surtax on an album shipped to Canada.
 
-4. **The Prodigi profile is unverified.** `prodigi-layflat-297` follows Prodigi's print guide (no
-   bleed, 10 mm safe margin; there is no 12x12 in layflat). Still true: Page range (18 or 24 minimum), bleed, safe
+4. **The Prodigi profile is unverified.** `prodigi-layflat-294` takes size, SKU and spine widths from
+   Prodigi's catalogue API, bleed and safe margin from its print guide. Still true: Page range (18 or 24 minimum), bleed, safe
    margins and the interior file shape need the API reference and one test order.
 
-5. **Cover and spine are built; the lab's cover rules are not confirmed.** `spec.cover` lays
+5. **Cover, spine and page order are built; a few cover rules are not confirmed.** Per
+   Prodigi's print guide, `book.pdf` is front cover, a single right-hand first page
+   (`spec.firstPage`, the title page), the spreads, a single left-hand last page
+   (`spec.lastPage`), back cover; Prodigi adds the blank inside covers. `spec.cover` lays
    out back and front as a flat wraparound (`cover-inset`, `cover-full`) and renders
    `cover.pdf`, `spine.pdf` and, for Prodigi, `book.pdf` (front cover, interior, back cover,
    per its print guide). Unknown until a sandbox order: whether Prodigi takes the cover inside
    the main PDF or as a separate `cover` print area; the wrap margin a printed hardcover needs
    (covers use the profile's bleed, 0 mm for Prodigi, and keep type 30 mm in); whether the
-   18-122 page range counts the covers; the spine width for this page count (the album marks
-   it `estimated` and the build warns).
+   18-122 page range counts the covers; and whether the spine goes as a file (the variant lists
+   no `spine` print area) or as `dynamicSpineDetails`. The spine width (12 mm for 32-34 pages)
+   now comes from the catalogue API.
 
 6. **HEIC and RAW files are skipped.** Ingest reports how many. iPhone photos (HEIC) and
    any photographer's RAW delivery need a decode step (libheif, libraw) before ingest.

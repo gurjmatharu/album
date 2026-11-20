@@ -63,6 +63,7 @@ export function lint(spec: AlbumSpec, layout: Layout): Issue[] {
     }
 
     if (sp.template.cover) err("cover-in-interior", `spread ${sp.id}: ${sp.template.id} is a cover layout`, { spread: sp.id });
+    if (sp.template.single) err("page-in-interior", `spread ${sp.id}: ${sp.template.id} is a single-page layout (firstPage / lastPage)`, { spread: sp.id });
 
     if (theme && !theme.templates.includes(sp.template.id)) {
       err("off-theme", `spread ${sp.id}: template ${sp.template.id} is not part of the ${theme.id} theme`, { spread: sp.id });
@@ -149,7 +150,7 @@ export function summarize(issues: Issue[]): { errors: number; warnings: number }
 }
 
 /** Rules that make no sense for a cover on its own. */
-const NOT_FOR_COVER = new Set(["page-count", "profile-unverified", "chronology", "pacing", "off-theme", "unknown-theme", "coverage", "cover-in-interior"]);
+const NOT_FOR_COVER = new Set(["page-count", "profile-unverified", "chronology", "pacing", "off-theme", "unknown-theme", "coverage", "cover-in-interior", "page-in-interior"]);
 
 /**
  * The cover's checks: the same picture and type rules as a spread (resolution, faces, type in
@@ -171,5 +172,27 @@ export function lintCover(spec: AlbumSpec, cover: Layout | undefined): Issue[] {
   } else if (spine.estimated) {
     out.push({ severity: "warning", rule: "spine-estimated", spread: "cover", message: `cover: spine width ${spine.widthMm} mm is an estimate; take it from the lab for ${spec.spreads.length * 2} pages before ordering` });
   }
+  return out;
+}
+
+/**
+ * The single first and last pages: the right layout on the right side, the same picture and
+ * type rules as a spread, and a warning when a lab that binds this way will get blank pages.
+ */
+export function lintPages(spec: AlbumSpec, first: Layout | undefined, last: Layout | undefined, profile: { cover?: string; vendor: string }): Issue[] {
+  const out: Issue[] = [];
+  const check = (which: "firstPage" | "lastPage", l: Layout | undefined, side: "R" | "L") => {
+    const pg = spec[which];
+    if (!pg || !l) {
+      if (profile.cover === "in-book") out.push({ severity: "warning", rule: "blank-page", spread: which, message: `${which}: none set, so the book gets a blank ${side === "R" ? "first (right-hand)" : "last (left-hand)"} content page; ${profile.vendor} binds the PDF that way` });
+      return;
+    }
+    const sp = l.spreads[0];
+    if (sp && sp.template.single !== side) out.push({ severity: "error", rule: "wrong-page-side", spread: which, message: `${which}: ${sp.template.id} is not a ${side === "R" ? "right" : "left"}-hand single-page layout` });
+    const sub = { ...spec, spreads: [{ id: which, chapter: which, template: pg.template, slots: pg.slots, text: pg.text }] };
+    out.push(...lint(sub, l).filter((i) => !NOT_FOR_COVER.has(i.rule)));
+  };
+  check("firstPage", first, "R");
+  check("lastPage", last, "L");
   return out;
 }

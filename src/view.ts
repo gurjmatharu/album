@@ -78,8 +78,23 @@ export async function buildViewer(spec: AlbumSpec, profile: Profile, photos: Pho
   mkdirSync(join(dir, "pages"), { recursive: true });
   mkdirSync(tmp, { recursive: true });
 
-  const pages = await trimmedPages(printPath, profile, tmp);
-  if (pages.length !== spec.spreads.length * 2) throw new Error(`the print file has ${pages.length} pages for ${spec.spreads.length} spreads`);
+  // As bound: where the lab binds one PDF (book.pdf), show it page for page, with the lab's
+  // blank inside covers beside the single first and last pages. Otherwise the spreads alone.
+  const bookPath = join(outDir, "book.pdf");
+  const bound = profile.cover === "in-book" && profile.export === "pdf-pages" && existsSync(bookPath);
+  let pages: Buffer[];
+  let chapters: string[];
+  if (bound) {
+    const all = await trimmedPages(bookPath, profile, tmp);
+    const meta = await sharp(all[1]!).metadata();
+    const blank = await sharp({ create: { width: meta.width!, height: meta.height!, channels: 3, background: "#ffffff" } }).png().toBuffer();
+    pages = [blank, ...all.slice(1, -1), blank];
+    chapters = ["", ...spec.spreads.map((s) => s.chapter), ""];
+  } else {
+    pages = await trimmedPages(printPath, profile, tmp);
+    chapters = spec.spreads.map((s) => s.chapter);
+  }
+  if (pages.length !== chapters.length * 2) throw new Error(`the print file has ${pages.length} pages for ${chapters.length} spreads`);
   const names: string[] = [];
   for (let i = 0; i < pages.length; i++) {
     const n = String(i + 1).padStart(3, "0");
@@ -116,7 +131,7 @@ export async function buildViewer(spec: AlbumSpec, profile: Profile, photos: Pho
     paper: spec.background,
     cover: hero ? "cover.jpg" : null,
     front,
-    spreads: spec.spreads.map((s, i) => ({ chapter: s.chapter, left: names[2 * i]!, right: names[2 * i + 1]! })),
+    spreads: chapters.map((chapter, i) => ({ chapter, left: names[2 * i]!, right: names[2 * i + 1]! })),
   };
   const index = join(dir, "index.html");
   writeFileSync(index, viewerHtml(data));
@@ -201,9 +216,6 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-off
 .nav:disabled{opacity:0;pointer-events:none}
 .nav svg{width:20px;height:20px}
 .prev{left:clamp(10px,2vw,24px)}.next{right:clamp(10px,2vw,24px)}
-.chapter{position:absolute;bottom:2px;left:0;right:0;text-align:center;font-family:var(--serif);font-style:italic;font-size:15px;color:var(--muted);
-  opacity:0;transition:opacity .4s;pointer-events:none}
-.chapter.on{opacity:1}
 
 /* filmstrip */
 .strip{display:flex;gap:10px;overflow-x:auto;padding:12px clamp(16px,3vw,32px) max(16px,env(safe-area-inset-bottom));scrollbar-width:none;scroll-behavior:smooth}
@@ -266,7 +278,6 @@ kbd{font-family:var(--sans);font-size:11px;border:1px solid rgba(244,238,230,.3)
     <div class="leaf" id="leaf"><div class="face front"><img alt=""><div class="shade"></div></div><div class="face back"><img alt=""><div class="shade"></div></div></div>
   </div>
   <button class="nav next" id="next" aria-label="Next (→)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
-  <div class="chapter" id="chapter"></div>
 </main>
 <nav class="strip" id="strip" aria-label="Spreads"></nav>
 
@@ -322,10 +333,6 @@ function paint() {
   $("count").innerHTML = (single ? "Page " : "Spread ") + "<b>" + here + "</b><span class=of> of " + total + "</span>";
   $("prev").disabled = pg === 0;
   $("next").disabled = single ? pg >= pages.length - 1 : sp >= D.spreads.length - 1;
-  const ch = D.spreads[sp].chapter, prevCh = sp > 0 ? D.spreads[sp - 1].chapter : null;
-  const named = ch && !/^chapter \\d+$/i.test(ch);
-  $("chapter").textContent = named ? ch : "";
-  $("chapter").classList.toggle("on", !!named && ch !== prevCh);
   document.querySelectorAll(".thumb").forEach((b, i) => b.setAttribute("aria-current", String(i === sp)));
   const cur = document.querySelector('.thumb[aria-current="true"]');
   if (cur) cur.scrollIntoView({ block: "nearest", inline: "center", behavior: reduce.matches ? "auto" : "smooth" });

@@ -118,7 +118,7 @@ function printHtml(layout: Layout, files: Map<PlacedSlot, string>, bg: string): 
 }
 
 /** The file a person reads: a summary page, then every spread with trim, safe zone, fold and faces drawn on. */
-function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, string>, issues: Issue[], preps: Map<PlacedSlot, Prep>, coverSpread?: PlacedSpread): { html: string; widthMm: number; heightMm: number; sheets: number } {
+function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, string>, issues: Issue[], preps: Map<PlacedSlot, Prep>, before: PlacedSpread[] = [], after: PlacedSpread[] = []): { html: string; widthMm: number; heightMm: number; sheets: number } {
   const p = layout.profile;
   const b = p.bleedMm;
   const pad = 12;
@@ -135,14 +135,16 @@ function proofHtml(spec: AlbumSpec, layout: Layout, files: Map<PlacedSlot, strin
 <p class="${errors.length ? "error" : "ok"}">${errors.length ? `${errors.length} errors: this album is not ready to print.` : "No lint errors."} ${warnings.length} warnings.</p>
 <p>Red line: trim. Green dashes: safe zone. Blue band: fold. Green boxes: faces; red boxes: faces cut or on the fold.</p>
 <ul>${[...errors, ...warnings].slice(0, 60).map(li).join("")}</ul></div>`;
-  const sheets = (coverSpread ? [coverSpread, ...layout.spreads] : layout.spreads).map((sp) => {
+  const label = (sp: PlacedSpread) =>
+    sp.id === "cover" ? "left page: back cover, right page: front cover" : sp.id === "firstPage" ? "first content page: the right-hand page only (facing the blank inside front cover)" : sp.id === "lastPage" ? "last content page: the left-hand page only (facing the blank inside back cover)" : esc(sp.chapter);
+  const sheets = [...before, ...layout.spreads, ...after].map((sp) => {
     const mine = issues.filter((i) => i.spread === sp.id);
     const rows = sp.slots
       .map((s) => `${s.def.id}: ${esc(s.photo.path)} ${Math.round(s.effDpi)} dpi${s.faces.filter((f) => f.person).length ? " [" + s.faces.map((f) => f.person).filter(Boolean).join(", ") + "]" : ""}${preps.get(s) ? ` (${esc(describePrep(preps.get(s)!))})` : ""}`)
       .join(" &nbsp;|&nbsp; ");
     return `<div class="sheet" style="width:${mm(w)};height:${mm(h)}">
 <div style="position:absolute;left:${mm(pad)};top:${mm(pad)};width:${mm(layout.spreadMm.w + 2 * b)};height:${mm(layout.spreadMm.h + 2 * b)};background:${sp.background ?? spec.background};outline:0.2mm solid #999">${spreadHtml(sp, files, layout, true, sp.background ?? spec.background)}</div>
-<div class="foot" style="left:${mm(pad)};top:${mm(pad + layout.spreadMm.h + 2 * b + 3)};width:${mm(w - 2 * pad)}"><b>${esc(sp.id)}</b> ${sp === coverSpread ? "left page: back cover, right page: front cover (spine is its own file)" : esc(sp.chapter)} · ${esc(sp.template.id)}<br>${rows}${mine.length ? `<ul>${mine.map(li).join("")}</ul>` : ""}</div></div>`;
+<div class="foot" style="left:${mm(pad)};top:${mm(pad + layout.spreadMm.h + 2 * b + 3)};width:${mm(w - 2 * pad)}"><b>${esc(sp.id)}</b> ${label(sp)} · ${esc(sp.template.id)}<br>${rows}${mine.length ? `<ul>${mine.map(li).join("")}</ul>` : ""}</div></div>`;
   });
   const css = `@page{size:${mm(w)} ${mm(h)};margin:0}
 body{font:11pt/1.35 system-ui,sans-serif;color:#111}
@@ -173,15 +175,15 @@ export interface RenderOutput {
   };
 }
 
-/** Front and back cover as two pages (front first), each a page plus bleed, cut from the cover spread. */
-function coverHtml(cover: PlacedSpread, layout: Layout, files: Map<PlacedSlot, string>, bg: string): { html: string; widthMm: number; heightMm: number } {
+/** Pages cut from one spread, in the order given ("R" = right half, "L" = left half), each a page plus bleed. */
+function halvesHtml(sp: PlacedSpread, halves: ("L" | "R")[], layout: Layout, files: Map<PlacedSlot, string>, bg: string): { html: string; widthMm: number; heightMm: number } {
   const p = layout.profile;
   const b = p.bleedMm;
   const w = p.pageMm.w + 2 * b;
   const h = layout.spreadMm.h + 2 * b;
-  const paper = cover.background ?? bg;
-  const sheets = [-p.pageMm.w, 0].map(
-    (off) => `<div class="sheet" style="width:${mm(w)};height:${mm(h)};background:${paper}">${spreadHtml(cover, files, layout, false, paper).replace('class="spread" style="', `class="spread" style="left:${mm(off)};`)}</div>`,
+  const paper = sp.background ?? bg;
+  const sheets = halves.map((side) => (side === "R" ? -p.pageMm.w : 0)).map(
+    (off) => `<div class="sheet" style="width:${mm(w)};height:${mm(h)};background:${paper}">${spreadHtml(sp, files, layout, false, paper).replace('class="spread" style="', `class="spread" style="left:${mm(off)};`)}</div>`,
   );
   return { html: doc(`@page{size:${mm(w)} ${mm(h)};margin:0}`, sheets.join("")), widthMm: w, heightMm: h };
 }
@@ -201,9 +203,18 @@ function spineHtml(spec: AlbumSpec, layout: Layout): { html: string; widthMm: nu
 }
 
 /** Always writes proof.pdf. Writes the print file only when `withPrint` is set (the caller withholds it on lint errors). */
-export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], sourceDir: string, cacheDir: string, outDir: string, withPrint: boolean, coverLayout?: Layout): Promise<RenderOutput> {
-  const cover = coverLayout?.spreads[0];
-  const groups = cover ? [...layout.spreads, cover] : layout.spreads;
+/** The parts of the book outside the spreads, each laid out like a spread (layout.ts). */
+export interface BookParts {
+  cover?: Layout;
+  firstPage?: Layout;
+  lastPage?: Layout;
+}
+
+export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], sourceDir: string, cacheDir: string, outDir: string, withPrint: boolean, parts: BookParts = {}): Promise<RenderOutput> {
+  const cover = parts.cover?.spreads[0];
+  const first = parts.firstPage?.spreads[0];
+  const last = parts.lastPage?.spreads[0];
+  const groups = [...layout.spreads, ...[cover, first, last].filter((x): x is PlacedSpread => !!x)];
   const p = layout.profile;
   mkdirSync(outDir, { recursive: true });
   const files = new Map<PlacedSlot, string>();
@@ -229,7 +240,7 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
       await page.pdf({ path: join(outDir, name), width: mm(w), height: mm(h), printBackground: true, preferCSSPageSize: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });
     };
 
-    const proof = proofHtml(spec, layout, files, issues, preps, cover);
+    const proof = proofHtml(spec, layout, files, issues, preps, [cover, first].filter((x): x is PlacedSpread => !!x), last ? [last] : []);
     await toPdf(proof.html, "proof.pdf", proof.widthMm, proof.heightMm);
 
     const checkDir = join(outDir, "check");
@@ -238,7 +249,7 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
     const proofOut = { count: proof.sheets, widthMm: proof.widthMm, heightMm: proof.heightMm };
     rmSync(join(outDir, "print.pdf"), { force: true });
     rmSync(join(outDir, "spreads"), { recursive: true, force: true });
-    for (const f of ["cover.pdf", "spine.pdf", "book.pdf"]) rmSync(join(outDir, f), { force: true });
+    for (const f of ["cover.pdf", "spine.pdf", "book.pdf", "first.pdf", "last.pdf"]) rmSync(join(outDir, f), { force: true });
     if (!withPrint) return { proof: join(outDir, "proof.pdf"), expected: { proof: proofOut } };
 
     const pr = printHtml(layout, files, spec.background);
@@ -270,7 +281,7 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
     }
     const extras: NonNullable<RenderOutput["expected"]["extras"]> = [];
     if (cover) {
-      const c = coverHtml(cover, layout, files, spec.background);
+      const c = halvesHtml(cover, ["R", "L"], layout, files, spec.background);
       await toPdf(c.html, "cover.pdf", c.widthMm, c.heightMm);
       extras.push({ label: "cover.pdf", file: join(outDir, "cover.pdf"), count: 2, widthMm: c.widthMm, heightMm: c.heightMm });
       const sp = spineHtml(spec, layout);
@@ -278,16 +289,31 @@ export async function render(spec: AlbumSpec, layout: Layout, issues: Issue[], s
         await toPdf(sp.html, "spine.pdf", sp.widthMm, sp.heightMm);
         extras.push({ label: "spine.pdf", file: join(outDir, "spine.pdf"), count: 1, widthMm: sp.widthMm, heightMm: sp.heightMm });
       }
-      // Some labs (Prodigi) want one PDF: front cover, the interior, back cover.
+      // Labs that bind one PDF (Prodigi layflat, per its print guide): page 1 front cover; the
+      // lab adds a blank inside front cover, so page 2 is a right-hand page on its own; spreads
+      // follow in pairs; the second-to-last page is a left-hand page on its own facing the
+      // lab's blank inside back cover; the last page is the back cover.
       if (p.cover === "in-book" && kind === "pdf" && p.export === "pdf-pages") {
+        const single = async (sp: PlacedSpread | undefined, side: "L" | "R", name: string) => {
+          if (!sp) return undefined;
+          const s = halvesHtml(sp, [side], layout, files, spec.background);
+          await toPdf(s.html, name, s.widthMm, s.heightMm);
+          extras.push({ label: name, file: join(outDir, name), count: 1, widthMm: s.widthMm, heightMm: s.heightMm });
+          return PDFDocument.load(readFileSync(join(outDir, name)));
+        };
+        const [firstDoc, lastDoc] = [await single(first, "R", "first.pdf"), await single(last, "L", "last.pdf")];
         const book = await PDFDocument.create();
         const [cv, inner] = await Promise.all([PDFDocument.load(readFileSync(join(outDir, "cover.pdf"))), PDFDocument.load(readFileSync(printPath))]);
         const [front, back] = await book.copyPages(cv, [0, 1]);
+        const size: [number, number] = [front!.getWidth(), front!.getHeight()];
+        const add = async (d: PDFDocument | undefined) => (d ? book.addPage((await book.copyPages(d, [0]))[0]!) : book.addPage(size)); // no page set: a blank white page
         book.addPage(front!);
+        await add(firstDoc);
         for (const pg of await book.copyPages(inner, inner.getPageIndices())) book.addPage(pg);
+        await add(lastDoc);
         book.addPage(back!);
         writeFileSync(join(outDir, "book.pdf"), await book.save());
-        extras.push({ label: "book.pdf", file: join(outDir, "book.pdf"), count: pr.sheets + 2, widthMm: pr.widthMm, heightMm: pr.heightMm });
+        extras.push({ label: "book.pdf", file: join(outDir, "book.pdf"), count: pr.sheets + 4, widthMm: pr.widthMm, heightMm: pr.heightMm });
       }
     }
     return {

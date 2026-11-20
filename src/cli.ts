@@ -5,8 +5,8 @@ import { cull, type Select } from "./cull";
 import { directClaude } from "./director/claude";
 import { directHeuristic, type DirectOptions } from "./director/heuristic";
 import { ingest } from "./ingest";
-import { resolveCover, resolveLayout } from "./layout";
-import { lint, lintCover, summarize } from "./lints";
+import { resolveCover, resolveLayout, resolvePage } from "./layout";
+import { lint, lintCover, lintPages, summarize } from "./lints";
 import { preflight } from "./preflight";
 import { readSourceDir, render } from "./render";
 import { THEMES } from "./themes";
@@ -124,8 +124,9 @@ async function main(): Promise<number> {
     const photos = loadPhotos(work);
     const byId = new Map(photos.map((x) => [x.id, x]));
     const layout = resolveLayout(spec, byId, loadProfile(spec.profile));
-    const coverLayout = resolveCover(spec, byId, loadProfile(spec.profile));
-    const issues = [...lint(spec, layout), ...lintCover(spec, coverLayout)];
+    const profile = loadProfile(spec.profile);
+    const parts = { cover: resolveCover(spec, byId, profile), firstPage: resolvePage(spec, "firstPage", byId, profile), lastPage: resolvePage(spec, "lastPage", byId, profile) };
+    const issues = [...lint(spec, layout), ...lintCover(spec, parts.cover), ...lintPages(spec, parts.firstPage, parts.lastPage, profile)];
     writeJson(`${p.out}/lint.json`, issues);
     printIssues(issues);
     const errors = summarize(issues).errors;
@@ -134,7 +135,7 @@ async function main(): Promise<number> {
       return errors ? 1 : 0;
     }
     const withPrint = errors === 0 || flags.force === "1";
-    const out = await render(spec, layout, issues, readSourceDir(p.source), p.assets, p.out, withPrint, coverLayout);
+    const out = await render(spec, layout, issues, readSourceDir(p.source), p.assets, p.out, withPrint, parts);
     const checks = await preflight(out);
     writeJson(`${p.out}/preflight.json`, checks);
     for (const c of checks) console.log(`  ${c.ok ? "ok  " : "FAIL"} ${c.name}: ${c.detail}`);

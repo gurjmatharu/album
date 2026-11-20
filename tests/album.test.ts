@@ -7,8 +7,8 @@ import { CATALOG } from "../src/catalog";
 import { cull } from "../src/cull";
 import { allocate, chapters, directHeuristic } from "../src/director/heuristic";
 import { ingest, laplacianVariance } from "../src/ingest";
-import { resolveCover, resolveLayout, solveCrop } from "../src/layout";
-import { hamming, lint, lintCover } from "../src/lints";
+import { resolveCover, resolveLayout, resolvePage, solveCrop } from "../src/layout";
+import { hamming, lint, lintCover, lintPages } from "../src/lints";
 import { preflight } from "../src/preflight";
 import { render } from "../src/render";
 import type { AlbumSpec, Photo, Profile } from "../src/types";
@@ -259,6 +259,26 @@ describe("cover and spine", () => {
   });
 });
 
+describe("single first and last pages", () => {
+  const base = { ...spec([]), theme: "editorial" };
+  const ps = new Map<string, Photo>();
+  const bound = { cover: "in-book", vendor: "prodigi" };
+
+  test("the title page must be a right-hand layout and the colophon a left-hand one", () => {
+    const wrong = { ...base, firstPage: { template: "page-colophon", slots: [], text: { line: "x" } }, lastPage: { template: "page-title", slots: [], text: { title: "x" } } };
+    const rules = lintPages(wrong, resolvePage(wrong, "firstPage", ps, profile), resolvePage(wrong, "lastPage", ps, profile), bound).map((i) => i.rule);
+    expect(rules.filter((r) => r === "wrong-page-side")).toHaveLength(2);
+    const right = { ...base, firstPage: { template: "page-title", slots: [], text: { title: "x" } }, lastPage: { template: "page-colophon", slots: [], text: { line: "x" } } };
+    expect(lintPages(right, resolvePage(right, "firstPage", ps, profile), resolvePage(right, "lastPage", ps, profile), bound)).toEqual([]);
+  });
+
+  test("a lab that binds one PDF gets a warning when a single page is missing", () => {
+    const issues = lintPages(base, undefined, undefined, bound);
+    expect(issues.map((i) => i.rule)).toEqual(["blank-page", "blank-page"]);
+    expect(lintPages(base, undefined, undefined, { vendor: "whcc" })).toEqual([]);
+  });
+});
+
 describe("print prep", () => {
   const even: PrepStats = { mean: [0.5, 0.5, 0.5], p05: 0.1, p25: 0.35, p50: 0.5, p95: 0.85 };
   const backlit: PrepStats = { mean: [0.45, 0.42, 0.4], p05: 0.03, p25: 0.12, p50: 0.35, p95: 0.97 };
@@ -322,7 +342,7 @@ describe("end to end on the synthetic sample", () => {
     album.cover = { template: "cover-inset", slots: [{ slot: "a", photo: kept[0]!.id }], text: { title: "Test" }, spine: { widthMm: 12, text: "Test" } };
     const coverLayout = resolveCover(album, new Map(photos.map((x) => [x.id, x])), small);
     expect(lintCover(album, coverLayout).filter((i) => i.severity === "error")).toEqual([]);
-    const out = await render(album, layout, issues, join(dir, "photos"), p.assets, p.out, true, coverLayout);
+    const out = await render(album, layout, issues, join(dir, "photos"), p.assets, p.out, true, { cover: coverLayout });
     expect(out.expected.extras?.map((x) => x.label)).toEqual(["cover.pdf", "spine.pdf"]);
     const checks = await preflight(out);
     expect(checks.filter((c) => !c.ok)).toEqual([]);

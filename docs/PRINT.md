@@ -7,12 +7,41 @@ spec does not change between them, only `--profile`.
 | Profile | Use | Export | Verified |
 |---|---|---|---|
 | `proof-10x10` | validating the pipeline, reading a PDF | one PDF page per page | yes (no lab to match) |
-| `prodigi-layflat-297` | first physical copy, 297x297 mm (11.7 in) | one PDF page per page, no bleed | **no** |
+| `prodigi-layflat-294` | first physical copy, 294x294 mm (`BOOK-FE-11_7-SQ-LF-G`) | one PDF page per page, no bleed; `book.pdf` with covers | **no** |
 | `whcc-album-10x10` | the final album | one JPEG per spread | **no, placeholder numbers** |
 
 A profile sets page size, bleed, safe margin, the no-face band around the fold, target and
 minimum resolution, the page range and the export shape. `verified: false` puts a warning on
 every build until someone checks the numbers against the lab's own spec.
+
+## Prodigi catalogue API, 2026-11-20 (live key, read-only calls; no order created)
+
+- Square layflat SKU **`BOOK-FE-11_7-SQ-LF-G`**: hard matte cover, 190gsm gloss pages,
+  `default` print area **294 x 294 mm** at 300 dpi (the 297 mm in the print guide is the A4
+  width, not the square). Made in US or DE, ships worldwide, 120 h production.
+- **Spine** (`GET /catalogue/variants/{sku}/spine`, CA, any province): 10 mm at 18 pages,
+  12 mm at 32 and 34, 14 mm at 40. The variant lists no `spine` print area; the API also
+  accepts `spineDetails.dynamicSpineDetails` (colour plus text rendered in production).
+- **Quote** (`POST /quotes/order`, one book, a Toronto address, USD): 32 pages = items 38.38
+  (28.58 for the first 18 pages + 0.70 a page) + shipping 24.26 = **62.64**, tax 0.00. Budget
+  and Standard cost the same. It ships from Prodigi's **German lab** (de8), so Canadian GST/HST
+  and a carrier handling fee are due on delivery.
+- Sandbox orders need a `sandbox_` key from the sandbox dashboard; a live key cannot be
+  turned into one by changing its prefix.
+
+## Prodigi layflat page order (print guide, page 6)
+
+PDF page 1 is the front cover. Prodigi adds a blank inside front cover, so **PDF page 2
+prints alone on the first right-hand page**; spreads are PDF pages 3+4, 5+6, and so on; the
+**second-to-last PDF page prints alone on a left-hand page** facing a blank inside back cover
+that Prodigi adds; the last PDF page is the back cover. A PDF that puts spreads straight
+after the cover prints every spread split across two openings. `book.pdf` follows the
+guide: `spec.firstPage` (a `page-*` right-hand layout, e.g. the title page) and
+`spec.lastPage` (a left-hand layout, e.g. a colophon) fill the two single pages, or blank
+white pages go in their place with a `blank-page` warning. The spine for this book is set
+with `dynamicSpineDetails` in the API or in the dashboard's manual order form (fonts: Arial,
+Brandon, DarkCourier, Georgia, GochiHand, Helvetica, Tahoma, TimesNewRoman, Verdana).
+Prodigi recommends PDF/X-4 with fonts embedded and transparency flattened.
 
 ## Lab research, 2026-11-20 (from the labs' own docs; nothing ordered, no account used)
 
@@ -47,7 +76,7 @@ printed or charged) [OpenAPI spec](https://www.prodigi.com/print-api/docs/openap
   shipping $7.95 plus 10% of the order plus the current tariff.
 
 **What this means here:** the old `prodigi-layflat-12x12` profile described a product Prodigi does
-not sell; it is replaced by `prodigi-layflat-297` with no bleed and a 10 mm safe margin. WHCC cannot take
+not sell; it was replaced by `prodigi-layflat-297`, then by `prodigi-layflat-294` once the catalogue API gave the real size (see below). WHCC cannot take
 this pipeline's output through its API until headless ordering ships; its spreads would be
 uploaded into the editor by hand.
 

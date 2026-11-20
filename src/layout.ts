@@ -210,3 +210,10 @@ export function resolveCover(spec: AlbumSpec, photos: Map<string, Photo>, profil
   if (!c) return undefined;
   return resolveLayout({ ...spec, spreads: [{ id: "cover", chapter: "cover", template: c.template, slots: c.slots, text: c.text, background: c.background }] }, photos, profile);
 }
+
+/** A single first or last page laid out like a spread; only its template's `single` half is printed. */
+export function resolvePage(spec: AlbumSpec, which: "firstPage" | "lastPage", photos: Map<string, Photo>, profile: Profile): Layout | undefined {
+  const pg = spec[which];
+  if (!pg) return undefined;
+  return resolveLayout({ ...spec, spreads: [{ id: which, chapter: which, template: pg.template, slots: pg.slots, text: pg.text, background: pg.background }] }, photos, profile);
+}

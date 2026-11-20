@@ -82,6 +82,18 @@ export const CoverSchema = z.object({
     .optional(),
 });
 
+/**
+ * A single page outside the spreads: the first content page (a right-hand page facing the
+ * blank inside front cover) or the last (a left-hand page facing the blank inside back cover),
+ * where a lab binds the PDF that way (Prodigi layflat). Uses a `page-*` template.
+ */
+export const PageSpecSchema = z.object({
+  template: z.string(),
+  slots: z.array(SlotSpecSchema).default([]),
+  text: z.record(z.string(), z.string()).optional(),
+  background: z.string().optional(),
+});
+
 export const SpecSchema = z.object({
   version: z.literal(1),
   title: z.string(),
@@ -98,6 +110,10 @@ export const SpecSchema = z.object({
     })
     .optional(),
   cover: CoverSchema.optional(),
+  /** First content page, a right-hand page on its own (a title page). */
+  firstPage: PageSpecSchema.optional(),
+  /** Last content page, a left-hand page on its own (a colophon). */
+  lastPage: PageSpecSchema.optional(),
   /** Print prep (src/prep.ts): "auto" when absent; "off" prints the pictures exactly as delivered. */
   prep: z.enum(["auto", "off"]).optional(),
   people: z.array(z.object({ id: z.string(), name: z.string(), minAppearances: z.number().int().min(0) })),
@@ -125,6 +141,8 @@ export const ProfileSchema = z.object({
   id: z.string(),
   name: z.string(),
   vendor: z.string(),
+  /** The lab's product code, when it has one (Prodigi catalogue SKU). */
+  sku: z.string().optional(),
   pageMm: z.object({ w: z.number().positive(), h: z.number().positive() }),
   bleedMm: z.number().min(0),
   /** Faces closer than this to a trim edge are warned about. */

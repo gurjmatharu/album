@@ -36,6 +36,8 @@ export interface Template {
   sequence?: boolean;
   /** A cover layout (left page = back cover, right page = front cover); never an interior spread. */
   cover?: boolean;
+  /** A single-page layout: only this half of the spread is printed (R = first page, L = last). */
+  single?: "L" | "R";
 }
 
 const M = 0.07; // page margin, fraction of a page
@@ -322,6 +324,30 @@ export const COVERS: Template[] = [
 ];
 
 CATALOG.push(...COVERS);
+
+/*
+ * Single pages: the first content page (right-hand, facing the blank inside front cover) and
+ * the last (left-hand, facing the blank inside back cover), for labs that bind that way.
+ * Rects are in spread fractions; only the named half is printed.
+ */
+export const PAGES: Template[] = [
+  {
+    id: "page-title",
+    single: "R",
+    description: "Title page: the title alone in Didot, centred a little above the middle of a right-hand page.",
+    slots: [],
+    text: [words("title", "R", 0.12, 0.3, 0.76, 0.2, "display", "center", "bottom"), words("subtitle", "R", 0.12, 0.52, 0.76, 0.08, "subtitle", "center")],
+  },
+  {
+    id: "page-colophon",
+    single: "L",
+    description: "Colophon: a date line and one italic line, centred on a left-hand page.",
+    slots: [],
+    text: [words("kicker", "L", 0.15, 0.44, 0.7, 0.05, "kicker", "center", "bottom"), words("line", "L", 0.15, 0.5, 0.7, 0.08, "subtitle", "center")],
+  },
+];
+
+CATALOG.push(...PAGES);
 
 export function templateById(id: string): Template | undefined {
   return CATALOG.find((t) => t.id === id);

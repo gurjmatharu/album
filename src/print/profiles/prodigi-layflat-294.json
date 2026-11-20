@@ -1,0 +1,17 @@
+{
+  "id": "prodigi-layflat-294",
+  "name": "Prodigi layflat photo book, square 294x294 mm (sold as 11.7 in / 12x12)",
+  "vendor": "prodigi",
+  "sku": "BOOK-FE-11_7-SQ-LF-G",
+  "pageMm": { "w": 294, "h": 294 },
+  "bleedMm": 0,
+  "safeMm": 10,
+  "gutterSafeMm": 6,
+  "dpi": 300,
+  "minDpi": 180,
+  "pages": { "min": 18, "max": 122, "multiple": 2 },
+  "export": "pdf-pages",
+  "cover": "in-book",
+  "verified": false,
+  "notes": "From Prodigi's catalogue API (2026-11-20): SKU BOOK-FE-11_7-SQ-LF-G, hard matte cover, 190gsm gloss pages, print area 'default' 294x294 mm at 300 dpi, made in US or DE (a Canadian quote ships from DE), 120 h production; spine 12 mm for 32-34 pages (10 mm at 18, 14 mm at 40). From the print guide: no bleed, 10 mm safe margin, page 1 front cover and last page back cover. Unconfirmed until a sandbox or test order: whether the cover belongs in the default PDF, the hardcover wrap, and how the spine is supplied (the variant lists no 'spine' print area; the API also offers dynamicSpineDetails). gutterSafeMm is this pipeline's own no-face band around the fold."
+}
